@@ -1,0 +1,20 @@
+# Node modules
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+*.zip
+
+# Local environment & scratch
+.env
+.env.local
+.env.*.local
+*.log
+
+# IDE & OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

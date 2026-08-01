@@ -1,0 +1,454 @@
+// 3-Phase Design Token Extraction Engine & Framework Detection
+
+import {
+  DesignTokens,
+  ColorToken,
+  ColorContext,
+  SemanticGroup,
+  TypographySystem,
+  FontFamily,
+  FontCategory,
+  TypeScaleEntry,
+  TypeRole,
+  SpacingScale,
+  SpacingValue,
+  ShadowToken,
+  ElevLevel,
+  RadiusToken,
+  RadiusLevel,
+  BreakpointToken,
+  FrameworkType
+} from "../../../shared/types";
+
+// Helper: HSL Proximity Clustering
+interface ParsedColor {
+  hex: string;
+  h: number;
+  s: number;
+  l: number;
+  a: number;
+  rgbStr: string;
+  hslStr: string;
+}
+
+function parseColor(colorStr: string): ParsedColor | null {
+  if (!colorStr || colorStr === "transparent" || colorStr === "rgba(0, 0, 0, 0)") return null;
+
+  // Create temporary canvas / element parsing if needed or parse rgb/rgba/hex string directly
+  let r = 0, g = 0, b = 0, a = 1;
+
+  if (colorStr.startsWith("rgb")) {
+    const match = colorStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+    if (match) {
+      r = parseInt(match[1]);
+      g = parseInt(match[2]);
+      b = parseInt(match[3]);
+      if (match[4] !== undefined) a = parseFloat(match[4]);
+    }
+  } else if (colorStr.startsWith("#")) {
+    let hex = colorStr.replace("#", "");
+    if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+    if (hex.length === 6) {
+      r = parseInt(hex.substring(0, 2), 16);
+      g = parseInt(hex.substring(2, 4), 16);
+      b = parseInt(hex.substring(4, 6), 16);
+    }
+  } else {
+    // Fallback for named colors
+    return null;
+  }
+
+  // Convert RGB to HSL
+  const rNorm = r / 255;
+  const gNorm = g / 255;
+  const bNorm = b / 255;
+  const max = Math.max(rNorm, gNorm, bNorm);
+  const min = Math.min(rNorm, gNorm, bNorm);
+  let h = 0, s = 0, l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case rNorm: h = (gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0); break;
+      case gNorm: h = (bNorm - rNorm) / d + 2; break;
+      case bNorm: h = (rNorm - gNorm) / d + 4; break;
+    }
+    h /= 6;
+  }
+
+  const hDeg = Math.round(h * 360);
+  const sPct = Math.round(s * 100);
+  const lPct = Math.round(l * 100);
+  const hexStr = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
+
+  return {
+    hex: hexStr,
+    h: hDeg,
+    s: sPct,
+    l: lPct,
+    a,
+    rgbStr: `rgb(${r}, ${g}, ${b})`,
+    hslStr: `hsl(${hDeg} ${sPct}% ${lPct}%)`
+  };
+}
+
+// Color Naming Heuristic
+function getSuggestedColorName(parsed: ParsedColor, index: number): string {
+  const { h, s, l } = parsed;
+  if (l <= 10) return "Black / Dark Neutral";
+  if (l >= 95) return "White / Light Neutral";
+  if (s <= 12) return l > 50 ? "Light Gray" : "Dark Gray";
+
+  if (h >= 345 || h < 15) return "Crimson Red";
+  if (h >= 15 && h < 45) return "Amber Orange";
+  if (h >= 45 && h < 70) return "Warm Yellow";
+  if (h >= 70 && h < 165) return "Emerald Green";
+  if (h >= 165 && h < 200) return "Cyan Teal";
+  if (h >= 200 && h < 260) return "Electric Indigo / Blue";
+  if (h >= 260 && h < 315) return "Deep Purple";
+  if (h >= 315 && h < 345) return "Magenta Pink";
+
+  return `Color ${index + 1}`;
+}
+
+// Semantic Classification
+function classifySemanticGroup(parsed: ParsedColor, frequency: number, isTop: boolean): SemanticGroup {
+  const { h, s, l } = parsed;
+  if (s <= 15) return "neutral";
+  if (h >= 120 && h <= 150 && s > 40) return "semantic-success";
+  if (h >= 35 && h <= 55 && s > 50) return "semantic-warning";
+  if ((h >= 345 || h <= 15) && s > 50) return "semantic-error";
+  if (isTop) return "primary";
+  if (frequency > 20) return "secondary";
+  return "accent";
+}
+
+// Phase 1: Scan Stylesheets
+export function scanStylesheets(): { cssVars: Record<string, string>; breakpoints: number[]; warnings: string[] } {
+  const cssVars: Record<string, string> = {};
+  const breakpointsSet = new Set<number>();
+  const warnings: string[] = [];
+
+  for (const sheet of Array.from(document.styleSheets)) {
+    let rules: CSSRuleList;
+    try {
+      rules = sheet.cssRules;
+    } catch {
+      warnings.push(`Cross-origin stylesheet skipped: ${sheet.href || "inline"}`);
+      continue;
+    }
+
+    if (!rules) continue;
+
+    for (const rule of Array.from(rules)) {
+      if (rule instanceof CSSStyleRule) {
+        if (rule.selectorText === ":root" || rule.selectorText === "*") {
+          const style = rule.style;
+          for (let i = 0; i < style.length; i++) {
+            const prop = style[i];
+            if (prop.startsWith("--")) {
+              cssVars[prop] = style.getPropertyValue(prop).trim();
+            }
+          }
+        }
+      } else if (rule instanceof CSSMediaRule) {
+        const matches = rule.conditionText.match(/\d+px/g);
+        if (matches) {
+          matches.forEach((m) => breakpointsSet.add(parseInt(m, 10)));
+        }
+      }
+    }
+  }
+
+  const breakpoints = Array.from(breakpointsSet).sort((a, b) => a - b);
+  return { cssVars, breakpoints, warnings };
+}
+
+// Phase 2 & 3: Extract & Deduplicate Tokens
+export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; warnings: string[]; framework: FrameworkType } {
+  const { cssVars, breakpoints: sheetBreakpoints, warnings } = scanStylesheets();
+
+  const colorCounts = new Map<string, { parsed: ParsedColor; count: number; contexts: Set<ColorContext> }>();
+  const fontMap = new Map<string, { family: string; stack: string; sizePx: number; weight: string; lh: string; count: number }>();
+  const spacingCounts = new Map<number, number>();
+  const shadowCounts = new Map<string, number>();
+  const radiusCounts = new Map<string, number>();
+
+  const elements = Array.from(document.querySelectorAll("*"))
+    .filter((el) => {
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    })
+    .slice(0, domLimit);
+
+  let tailwindClassHits = 0;
+  let styledComponentHits = 0;
+  let emotionHits = 0;
+
+  for (const el of elements) {
+    const className = el.className && typeof el.className === "string" ? el.className : "";
+
+    if (/(\bbg-|\btext-|\bp-|\bm-|\brounded-|\bflex\b|\bgrid\b)/.test(className)) {
+      tailwindClassHits++;
+    }
+    if (className.includes("sc-")) styledComponentHits++;
+    if (className.includes("css-")) emotionHits++;
+
+    const cs = getComputedStyle(el);
+
+    // Color extraction
+    const colorProps: { prop: string; ctx: ColorContext }[] = [
+      { prop: "color", ctx: "text" },
+      { prop: "background-color", ctx: "background" },
+      { prop: "border-color", ctx: "border" },
+      { prop: "outline-color", ctx: "outline" },
+      { prop: "fill", ctx: "fill" }
+    ];
+
+    for (const { prop, ctx } of colorProps) {
+      const val = cs.getPropertyValue(prop);
+      const parsed = parseColor(val);
+      if (parsed) {
+        const existing = colorCounts.get(parsed.hex);
+        if (existing) {
+          existing.count++;
+          existing.contexts.add(ctx);
+        } else {
+          colorCounts.set(parsed.hex, { parsed, count: 1, contexts: new Set([ctx]) });
+        }
+      }
+    }
+
+    // Typography
+    const familyStack = cs.fontFamily || "sans-serif";
+    const familyPrimary = familyStack.split(",")[0].trim().replace(/['"]/g, "");
+    const sizePx = parseFloat(cs.fontSize) || 16;
+    const weight = cs.fontWeight || "400";
+    const lh = cs.lineHeight || "normal";
+
+    const fontKey = `${familyPrimary}-${sizePx}-${weight}`;
+    const fontEntry = fontMap.get(fontKey);
+    if (fontEntry) {
+      fontEntry.count++;
+    } else {
+      fontMap.set(fontKey, { family: familyPrimary, stack: familyStack, sizePx, weight, lh, count: 1 });
+    }
+
+    // Spacing (Padding/Margin)
+    const spacingProps = [
+      "padding-top", "padding-right", "padding-bottom", "padding-left",
+      "margin-top", "margin-right", "margin-bottom", "margin-left"
+    ];
+    for (const p of spacingProps) {
+      const val = parseFloat(cs.getPropertyValue(p));
+      if (val > 0 && val < 200) {
+        spacingCounts.set(val, (spacingCounts.get(val) || 0) + 1);
+      }
+    }
+
+    // Shadows & Radii
+    const bs = cs.boxShadow;
+    if (bs && bs !== "none") {
+      shadowCounts.set(bs, (shadowCounts.get(bs) || 0) + 1);
+    }
+
+    const br = cs.borderRadius;
+    if (br && br !== "0px") {
+      radiusCounts.set(br, (radiusCounts.get(br) || 0) + 1);
+    }
+  }
+
+  // Framework Detection
+  let detectedFramework: FrameworkType = "vanilla";
+  if (tailwindClassHits > 20) detectedFramework = "tailwind";
+  else if (styledComponentHits > 5) detectedFramework = "styled-components";
+  else if (emotionHits > 5) detectedFramework = "emotion";
+  else if (Object.keys(cssVars).length > 5) detectedFramework = "vanilla";
+
+  // Phase 3: Normalization & Color Clustering (tolerance +-5 deg hue, +-10% sat, +-10% lightness)
+  const rawColors = Array.from(colorCounts.values()).sort((a, b) => b.count - a.count);
+  const colorTokens: ColorToken[] = [];
+  const colorMapReverse = new Map<string, string>(); // css variable lookup
+
+  for (const [varName, varVal] of Object.entries(cssVars)) {
+    const parsed = parseColor(varVal);
+    if (parsed) colorMapReverse.set(parsed.hex, varName);
+  }
+
+  let colorIdx = 0;
+  for (const { parsed, count, contexts } of rawColors) {
+    // Check if close to an already clustered color token
+    const existing = colorTokens.find((t) => {
+      const p = parseColor(t.hex);
+      if (!p) return false;
+      return (
+        Math.abs(p.h - parsed.h) <= 5 &&
+        Math.abs(p.s - parsed.s) <= 10 &&
+        Math.abs(p.l - parsed.l) <= 10
+      );
+    });
+
+    if (existing) {
+      existing.frequency += count;
+      Array.from(contexts).forEach((c) => {
+        if (!existing.contexts.includes(c)) existing.contexts.push(c);
+      });
+    } else {
+      const varName = colorMapReverse.get(parsed.hex);
+      const suggestedName = varName ? varName.replace(/^--/, "") : getSuggestedColorName(parsed, colorIdx);
+
+      colorTokens.push({
+        id: `col-${colorIdx + 1}`,
+        value: parsed.hex,
+        hex: parsed.hex,
+        hsl: parsed.hslStr,
+        rgb: parsed.rgbStr,
+        opacity: parsed.a,
+        frequency: count,
+        contexts: Array.from(contexts),
+        semanticGroup: classifySemanticGroup(parsed, count, colorIdx === 0),
+        cssVarName: varName,
+        suggestedName
+      });
+      colorIdx++;
+    }
+  }
+
+  // Normalize Typography
+  const familyGroupMap = new Map<string, { stack: string; weights: Set<number>; count: number }>();
+  for (const { family, stack, weight, count } of fontMap.values()) {
+    const wNum = parseInt(weight, 10) || 400;
+    const existing = familyGroupMap.get(family);
+    if (existing) {
+      existing.count += count;
+      existing.weights.add(wNum);
+    } else {
+      familyGroupMap.set(family, { stack, weights: new Set([wNum]), count });
+    }
+  }
+
+  const families: FontFamily[] = Array.from(familyGroupMap.entries()).map(([name, data]) => {
+    const category: FontCategory = name.toLowerCase().includes("mono")
+      ? "monospace"
+      : name.toLowerCase().includes("serif")
+      ? "serif"
+      : "sans-serif";
+    return {
+      name,
+      stack: data.stack,
+      category,
+      weights: Array.from(data.weights).sort((a, b) => a - b),
+      frequency: data.count
+    };
+  }).sort((a, b) => b.frequency - a.frequency);
+
+  const typeScale: TypeScaleEntry[] = Array.from(fontMap.values())
+    .sort((a, b) => b.sizePx - a.sizePx)
+    .map(({ family, sizePx, weight, lh, count }) => {
+      let role: TypeRole = "body";
+      if (sizePx >= 40) role = "h1";
+      else if (sizePx >= 32) role = "h2";
+      else if (sizePx >= 24) role = "h3";
+      else if (sizePx >= 20) role = "h4";
+      else if (sizePx >= 18) role = "h5";
+      else if (sizePx >= 16) role = "h6";
+      else if (sizePx >= 14) role = "body";
+      else if (sizePx >= 12) role = "body-sm";
+      else role = "caption";
+
+      return {
+        role,
+        fontSize: `${sizePx}px`,
+        fontSizePx: sizePx,
+        fontWeight: weight,
+        lineHeight: lh,
+        letterSpacing: "0px",
+        fontFamily: family,
+        frequency: count
+      };
+    });
+
+  // Normalize Spacing
+  const sortedSpacing = Array.from(spacingCounts.entries()).sort((a, b) => a[0] - b[0]);
+  const spacingValues: SpacingValue[] = sortedSpacing.map(([px, freq]) => ({
+    px,
+    rem: `${(px / 16).toFixed(2)}rem`,
+    token: `space-${px}`,
+    frequency: freq
+  }));
+
+  // Detect 4px / 8px grid
+  const baseUnit = 4;
+  const isGrid = spacingValues.every((v) => v.px % 4 === 0);
+
+  // Normalize Shadows
+  const shadowTokens: ShadowToken[] = Array.from(shadowCounts.entries()).map(([val, freq], idx) => {
+    let level: ElevLevel = "md";
+    if (val.includes("1px") || val.includes("2px")) level = "sm";
+    else if (val.includes("12px") || val.includes("16px")) level = "lg";
+    else if (val.includes("24px") || val.includes("32px")) level = "xl";
+
+    return {
+      value: val,
+      level,
+      blurPx: 8,
+      spreadPx: 0,
+      colorRgba: "rgba(0,0,0,0.2)",
+      frequency: freq
+    };
+  });
+
+  // Normalize Radii
+  const radiusTokens: RadiusToken[] = Array.from(radiusCounts.entries()).map(([val, freq]) => {
+    const px = parseFloat(val) || 0;
+    let level: RadiusLevel = "md";
+    if (val === "50%" || val === "9999px") level = "full";
+    else if (px <= 4) level = "sm";
+    else if (px <= 8) level = "md";
+    else if (px <= 16) level = "lg";
+    else level = "xl";
+
+    return {
+      value: val,
+      valuePx: px,
+      level,
+      frequency: freq
+    };
+  });
+
+  // Breakpoints
+  const defaultBreakpoints = [
+    { px: 640, em: "40em", label: "sm" },
+    { px: 768, em: "48em", label: "md" },
+    { px: 1024, em: "64em", label: "lg" },
+    { px: 1280, em: "80em", label: "xl" }
+  ];
+
+  const breakpointTokens: BreakpointToken[] = sheetBreakpoints.length > 0
+    ? sheetBreakpoints.map((px) => ({ px, em: `${px / 16}em`, label: px >= 1200 ? "xl" : px >= 992 ? "lg" : px >= 768 ? "md" : "sm" }))
+    : defaultBreakpoints;
+
+  const tokens: DesignTokens = {
+    colors: colorTokens,
+    typography: {
+      families,
+      scale: typeScale,
+      lineHeights: ["1", "1.2", "1.5", "1.6"],
+      letterSpacings: ["normal", "-0.02em", "0.05em"]
+    },
+    spacing: {
+      values: spacingValues,
+      baseUnit,
+      isGrid,
+      anomalies: []
+    },
+    shadows: shadowTokens,
+    radii: radiusTokens,
+    breakpoints: breakpointTokens,
+    cssVariables: cssVars,
+    zIndex: []
+  };
+
+  return { tokens, warnings, framework: detectedFramework };
+}

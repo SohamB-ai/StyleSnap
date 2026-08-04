@@ -1,9 +1,10 @@
 // Side Panel Top Header Zone Component
 
 import React, { useEffect, useState } from "react";
-import { Zap, MousePointer2, Settings as SettingsIcon } from "lucide-react";
+import { MousePointer2, Settings as SettingsIcon } from "lucide-react";
 import { useStore } from "../store";
 import { MessageType } from "../../shared/messages";
+import { StyleSnapLogoIcon } from "./Logo";
 
 export const Header: React.FC = () => {
   const [currentUrl, setCurrentUrl] = useState<string>("Active Tab");
@@ -40,10 +41,10 @@ export const Header: React.FC = () => {
     <header className="h-[48px] bg-surface border-b border-border px-4 flex items-center justify-between shrink-0">
       {/* Left: Brand Logo & Wordmark */}
       <div className="flex items-center gap-2">
-        <div className="w-6 h-6 rounded bg-accent/15 flex items-center justify-center text-accent">
-          <Zap className="w-4 h-4 fill-accent" />
-        </div>
-        <span className="font-bold text-sm text-primary tracking-tight">StyleSnap</span>
+        <StyleSnapLogoIcon size={22} className="rounded" />
+        <span className="font-bold text-sm text-primary tracking-tight">
+          Style<span className="text-accent">Snap</span>
+        </span>
       </div>
 
       {/* Center: Truncated Active Tab URL */}

@@ -1,13 +1,14 @@
 // Zero-State Landing UI Component
 
 import React from "react";
-import { Zap, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
+import { StyleSnapLogoIcon } from "./Logo";
 
 export const EmptyState: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-      <div className="w-14 h-14 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mb-4 animate-pulse">
-        <Zap className="w-7 h-7 fill-accent" />
+      <div className="w-16 h-16 rounded-2xl p-1 bg-accent/10 border border-accent/20 flex items-center justify-center mb-4 shadow-lg animate-pulse">
+        <StyleSnapLogoIcon size={52} className="rounded-xl" />
       </div>
 
       <h3 className="text-sm font-bold text-primary mb-2">Ready to Extract Design Tokens</h3>

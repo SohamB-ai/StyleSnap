@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { ExtractionResult, HistoryEntry, Settings } from "../shared/types";
 import { ElementSelectedPayload } from "../shared/messages";
 
-export type TabType = "tokens" | "assets" | "history";
+export type TabType = "tokens" | "assets" | "export" | "history";
 
 interface StyleSnapStore {
   activeTab: TabType;
@@ -42,7 +42,7 @@ export const useStore = create<StyleSnapStore>((set) => ({
   progressPct: 0,
   isInspecting: false,
   inspectedElement: null,
-  theme: "dark",
+  theme: "light",
   settingsOpen: false,
   historyEntries: [],
   toast: null,
@@ -54,12 +54,9 @@ export const useStore = create<StyleSnapStore>((set) => ({
   finishExtraction: (result) => set({ result, isExtracting: false, progressPct: 100, activeTab: "tokens" }),
   setInspecting: (isInspecting) => set({ isInspecting }),
   setInspectedElement: (inspectedElement) => set({ inspectedElement, isInspecting: false }),
-  setTheme: (theme) => {
-    const resolved = theme === "system"
-      ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-      : theme;
-    document.documentElement.setAttribute("data-theme", resolved);
-    set({ theme });
+  setTheme: (_theme) => {
+    document.documentElement.setAttribute("data-theme", "light");
+    set({ theme: "light" });
   },
   toggleSettings: () => set((state) => ({ settingsOpen: !state.settingsOpen })),
   setHistory: (historyEntries) => set({ historyEntries }),

@@ -1,0 +1,515 @@
+StyleSnap
+Chrome Extension
+UI / UX Specification  ·  v1.0
+Author  Guru (Soham Belwadkar)
+Status  Draft v1.0
+Date  July 2026
+Companion to  StyleSnap PRD + TRD + Extension Flow
+Product  Omenova Studio
+1. Design Philosophy
+StyleSnap's UI is built for developers, not general consumers. This drives every design decision: density over simplicity, precision over aesthetics, and zero friction over onboarding flows.
+Principle
+What it means in practice
+Developer-first density
+Information-dense panels are fine — devs read specs. No oversimplified dashboards.
+Dark-default
+Most devs work in dark mode. Dark is the default; light is available but secondary.
+Non-intrusive
+Side panel must never visually compete with the page being inspected. Subtle borders, no animations that draw eye from the page.
+Token-first styling
+Every colour, spacing, radius value in the extension UI is a CSS custom property. The design system eats its own cooking.
+Copy-first interactions
+Every value — every hex code, every CSS property, every component snippet — is one click from the clipboard. Copy is the primary action everywhere.
+Instant feedback
+Every copy, export, and extraction action must confirm visually within 200ms. No wondering if it worked.
+Graceful degradation
+Error and empty states are first-class screens, not afterthoughts. They tell the user exactly what happened and what to do next.
+2. Design System
+2.1  Colour Palette — Dark Theme (Default)
+Token
+Hex
+HSL
+Usage
+Role
+--bg-base
+#0F0F11
+hsl(240 7% 6%)
+Extension panel bg
+Base bg
+--bg-surface
+#1A1A1F
+hsl(240 6% 11%)
+Cards, tabs, inputs
+Surface
+--bg-elevated
+#222228
+hsl(240 5% 14%)
+Dropdowns, tooltips
+Elevated
+--bg-hover
+#2A2A32
+hsl(240 9% 18%)
+Button/item hover
+Hover
+--border
+#2D2D35
+hsl(240 7% 20%)
+All borders
+Separator
+--text-primary
+#F9FAFB
+hsl(210 20% 98%)
+Primary text
+Body text
+--text-secondary
+#9CA3AF
+hsl(220 9% 65%)
+Labels, metadata
+Muted text
+--text-muted
+#4B5563
+hsl(220 9% 35%)
+Placeholders
+Dim text
+--accent
+#4F46E5
+hsl(243 75% 59%)
+CTAs, active tabs, focus rings
+Primary
+--accent-hover
+#4338CA
+hsl(243 75% 52%)
+Accent on hover
+Primary hover
+--accent-subtle
+#1E1B4B
+hsl(243 46% 20%)
+Accent tint bg
+Accent bg
+--success
+#10B981
+hsl(160 84% 39%)
+Copy confirm, done states
+Success
+--warning
+#F59E0B
+hsl(38 92% 50%)
+Uncertain detections
+Warning
+--error
+#EF4444
+hsl(0 84% 60%)
+Error states, delete
+Danger
+2.2  Colour Palette — Light Theme
+Token
+Hex
+HSL
+Usage
+Role
+--bg-base
+#FFFFFF
+hsl(0 0% 100%)
+Panel bg
+Base bg
+--bg-surface
+#F9FAFB
+hsl(210 20% 98%)
+Cards, tabs
+Surface
+--bg-elevated
+#F3F4F6
+hsl(220 14% 96%)
+Dropdowns
+Elevated
+--border
+#E5E7EB
+hsl(220 13% 91%)
+All borders
+Separator
+--text-primary
+#111827
+hsl(221 39% 11%)
+Primary text
+Body text
+--text-secondary
+#6B7280
+hsl(220 9% 46%)
+Labels, metadata
+Muted text
+--accent
+#4F46E5
+hsl(243 75% 59%)
+CTAs, active tabs
+Primary
+--accent-subtle
+#EEF2FF
+hsl(234 89% 94%)
+Accent tint bg
+Accent bg
+2.3  Typography
+Role
+Font
+Size
+Weight
+Used for
+UI / Body
+Inter
+13px (26px DXA)
+400
+All panel text, labels, descriptions
+UI Bold
+Inter
+13px
+600
+Token names, section headers, button labels
+UI Small
+Inter
+11px (22px DXA)
+400
+Badges, timestamps, metadata
+UI Micro
+Inter
+10px (20px DXA)
+500
+Tooltips, count labels
+Code / Values
+JetBrains Mono
+12px (24px DXA)
+400
+Hex values, CSS properties, code snippets
+Heading
+Inter
+15px (30px DXA)
+700
+Section headers in side panel (Tokens, History etc.)
+JetBrains Mono is loaded from the extension bundle — it is not a Google Fonts dependency. Inter is loaded from the bundle as well (no CDN calls). Font loading must not be async — panel must render instantly.
+2.4  Spacing Scale
+--space-1:   4px    /* micro gaps, icon-to-label */           --space-2:   8px    /* tight padding inside buttons/badges */ --space-3:  12px    /* small component padding */             --space-4:  16px    /* standard padding (most panels) */      --space-5:  20px    /* between section groups */              --space-6:  24px    /* large gap between major blocks */      --space-8:  32px    /* section top margin */                  
+2.5  Border Radius
+--radius-sm:  4px    /* tags, badges, small inputs */--radius-md:  8px    /* cards, panels, dropdowns   */--radius-lg: 12px    /* main side panel container  */--radius-xl: 16px    /* modals, large overlays     */--radius-full: 9999px /* pills, toggle switches    */
+2.6  Elevation (Box Shadows — Dark Theme)
+--shadow-sm: 0 1px 2px rgba(0,0,0,0.4);       /* token cards      */--shadow-md: 0 4px 12px rgba(0,0,0,0.5);       /* dropdowns        */--shadow-lg: 0 8px 24px rgba(0,0,0,0.6);       /* toasts, overlays */
+2.7  Icon Library
+All icons are sourced from Lucide React (v0.383.0 — already listed in the Claude/React artifact available library). Icons are always rendered as SVG — no icon font. Size scale:
+12px — micro context icons (inside badges, inline with text)
+16px — standard UI icons (tab icons, action buttons)
+20px — emphasis icons (empty state illustration, error icons)
+24px — hero icons (large empty state centre illustration)
+Key icons used in StyleSnap:
+Lucide Icon Name
+Used for
+Where it appears
+Zap
+StyleSnap logo icon in header
+Header — left of "StyleSnap" wordmark
+Palette
+Tokens tab
+Tab bar icon
+Layers
+Components tab (V2)
+Tab bar icon
+Image
+Assets tab
+Tab bar icon
+Sparkles
+AI Prompt tab (V2)
+Tab bar icon
+History
+History tab
+Tab bar icon
+Download
+Download/export
+Export button, file download triggers
+Copy
+Copy to clipboard
+On every token, component, asset card
+MousePointer2
+Element inspector activate
+Inspector button
+Trash2
+Delete history entry
+History entry hover action
+Check
+Copy success confirmation
+Replaces Copy icon for 1.5s after copy
+AlertTriangle
+Warning / uncertain detection
+Uncertain component label
+Settings
+Settings panel
+Header right — settings gear icon
+Loader2
+Spinning loading state
+Extract button during EXTRACTING state
+3. Side Panel Anatomy
+The StyleSnap side panel is a Chrome Side Panel (chrome.sidePanel API). It renders at a fixed width of 380px alongside the active tab. It consists of four persistent zones.
+3.1  Overall Layout Structure
+┌─────────────────────────────────────────────────┐│  HEADER ZONE                            [48px]  ││  ⚡ StyleSnap      [url/title]    ⚙  ·  ·  ·   │├─────────────────────────────────────────────────┤│  TAB BAR                                [40px]  ││  [Tokens] [Components] [Assets] [AI] [History]  │├─────────────────────────────────────────────────┤│                                                  ││  CONTENT AREA                       [flexible]  ││  (scrollable — each tab renders here)           ││                                                  ││                                                  ││                                                  │├─────────────────────────────────────────────────┤│  ACTION BAR                             [52px]  ││  [⚡ Extract Full Page]          [↓ Export ▾]   │└─────────────────────────────────────────────────┘  Total height: 100vh (fills browser side panel)   
+3.2  Header Zone Spec
+┌─────────────────────────────────────────────────┐│  ⚡  StyleSnap   │  example.com/page  │  ⚙  ✕  ││  [logo+wordmark] │  [current tab url] │ [icons] │└─────────────────────────────────────────────────┘   Height: 48px  |  bg: --bg-surface                  Border bottom: 1px --border                         Padding: 0 16px                                     Logo: Zap icon (16px) + "StyleSnap" Inter 600       URL: truncated, Inter 11px muted, max-width:160px   Icons: Settings (⚙) 16px, chevron-collapse (✕) 16px
+3.3  Tab Bar Spec
+┌─────────────────────────────────────────────────┐│  [🎨Tokens] [◧Comp.] [🖼Assets] [✨AI] [⏱Hist] │└─────────────────────────────────────────────────┘   Height: 40px  |  bg: --bg-base                      Border bottom: 1px --border                          Tab padding: 0 12px                                  Active tab: --accent bottom-border 2px, text --accent, weight 600   Inactive tab: text --text-secondary, weight 400      Hover tab: bg --bg-hover, text --text-primary        Icon: 14px, left of label, 6px gap                   V1 visible tabs: Tokens, Assets, History             V2 adds: Components, AI Prompt                       Scroll tabs: if overflow, horizontal scroll with fade
+3.4  Action Bar Spec
+┌─────────────────────────────────────────────────┐│  [⚡ Extract Full Page ――――――]  [↓ Export ▾]    │└─────────────────────────────────────────────────┘   Height: 52px  |  bg: --bg-surface                    Border top: 1px --border                             Padding: 0 16px                                      Extract button: primary, flex-grow-1, max-w:220px     Export button: secondary dropdown, min-w:100px        Disabled states: both buttons greyed during EXTRACTING   EXTRACTING state: Extract button shows spinner + "Extracting..."
+4. Screens & Wireframes
+4.1  Empty State (First Launch / No Extraction)
+┌─────────────────────────────────────────────────┐│  ⚡ StyleSnap     chrome://newtab     ⚙         │├─────────────────────────────────────────────────┤│  [Tokens]  [Assets]  [History]                  │├─────────────────────────────────────────────────┤│                                                  ││                                                  ││               ⚡  (24px, --accent)               ││                                                  ││          Visit any website and click             ││            Extract to get started.              ││                                                  ││     StyleSnap will detect your site's           ││     colours, typography, spacing, and           ││     components — ready to export or             ││     paste into your AI coding tool.             ││                                                  ││                                                  │├─────────────────────────────────────────────────┤│  [⚡ Extract Full Page ────────]  [↓ Export ▾]  │└─────────────────────────────────────────────────┘  Icon: 40px Zap, --accent, 30% opacity              Heading: Inter 600, 15px, --text-primary            Body: Inter 400, 13px, --text-secondary           
+4.2  Extracting State (EXTRACTING)
+┌─────────────────────────────────────────────────┐│  ⚡ StyleSnap     stripe.com        ⚙           │├─────────────────────────────────────────────────┤│  [Tokens]  [Assets]  [History]                  │├─────────────════════════════════════════════════┤│  ████████████████████░░░░░░░░░░░░  55%          │  ← progress bar│  Analysing design tokens...                      │  ← step label├─────────────────────────────────────────────────┤│              (dimmed / skeleton)                 ││  ██████████████████  ████████████               │  ← skeleton rows│  ██████████  ████████████████████               ││  ████████████████  ████████                     ││                                                  │├─────────────────────────────────────────────────┤│  [↻ Extracting...   (disabled)]  [↓ Export ▾]  │└─────────────────────────────────────────────────┘  Progress bar: 4px height, --accent fill, animated    Track bg: --border                                   Step label: 11px --text-secondary, italic             Skeleton: bg --bg-elevated, 8px radius, animated       shimmer (linear-gradient moving L→R over 1.5s)    Extract button: disabled, spinner icon replacing ⚡
+4.3  Tokens Tab  [V1]
+┌─────────────────────────────────────────────────┐│  ⚡ StyleSnap     stripe.com        ⚙           │├─────────────────────────────────────────────────┤│  [🎨Tokens ─]  [Assets]  [History]              │  ← active tab├─────────────────────────────────────────────────┤│  COLOURS  ──────────────────────────  [Copy CSS]││  ┌────┐ #635BFF  Electric Indigo   PRIMARY  847 ││  │    │  hsl(252 95% 68%)          [Copy] [+]  ││  └────┘                                         ││  ┌────┐ #0A2540  Midnight Navy     NEUTRAL  612 ││  │    │  hsl(211 90% 15%)          [Copy] [+]  ││  └────┘                                         ││  ┌────┐ #00D4FF  Cyan              ACCENT   241 ││  │    │  hsl(188 100% 50%)         [Copy] [+]  ││  └────┘                                         ││  + 8 more colours                  [Show all]  ││                                                  ││  TYPOGRAPHY  ───────────────────────────────────││  Sohne  |  Sans-serif  |  12 weights            ││  Aa  Aa  Aa   64 / 48 / 36 / 24 / 16 / 14px   ││                                    [Copy CSS]   ││                                                  ││  SPACING  ─────────────────────────  4px grid   ││  ▪ ▪▪ ▪▪▪ ▪▪▪▪ ▪▪▪▪▪▪ ▪▪▪▪▪▪▪▪▪▪              ││  4  8   12  16    24       48px    [Copy Scale] ││                                                  ││  SHADOWS ──────────── RADII ─────────────────── ││  sm / md / lg / xl    none / sm / md / lg / full ││                                    [Copy Tokens] ││                                                  ││  BREAKPOINTS ───── 640 / 768 / 1024 / 1280px   ││                                    [Copy CSS]   │├─────────────────────────────────────────────────┤│  [⚡ Extract Full Page ────────]  [↓ Export ▾]  │└─────────────────────────────────────────────────┘
+Each color swatch is 28×28px, radius --radius-sm, with a 1px --border outline. The swatch colour is set dynamically from the extracted hex. Frequency count shown as a muted badge (e.g. "847").
+4.4  Components Tab  [V2]
+┌─────────────────────────────────────────────────┐│  ⚡ StyleSnap     stripe.com        ⚙           │├─────────────────────────────────────────────────┤│  [Tokens] [◧ Comp. ─] [Assets] [✨AI] [History] │├─────────────────────────────────────────────────┤│  14 components detected   [Filter ▾] [Sort ▾]  ││                                                  ││  ╔════════════════════════════════════════════╗  ││  ║ BUTTON                   ● 97%   ×24 inst ║  ││  ║ <button class="btn-primary"> ... </button> ║  ││  ║ background:#635BFF border-radius:6px ...   ║  ││  ║                      [Copy HTML] [Copy CSS]║  ││  ╚════════════════════════════════════════════╝  ││                                                  ││  ╔════════════════════════════════════════════╗  ││  ║ CARD                     ● 84%   × 6 inst ║  ││  ║ <div class="card"> ...                     ║  ││  ║                      [Copy HTML] [Copy CSS]║  ││  ╚════════════════════════════════════════════╝  ││                                                  ││  ╔════════════════════════════════════════════╗  ││  ║ NAVIGATION               ● 100%  × 1 inst ║  ││  ╚════════════════════════════════════════════╝  ││                                                  ││  ▸ Uncertain detections (3)  [Expand]           ││                                                  ││  [↓ Export components.md]                       │├─────────────────────────────────────────────────┤│  [⚡ Extract Full Page ────────]  [↓ Export ▾]  │└─────────────────────────────────────────────────┘  Confidence dot: green ≥90%, amber 70–89%, red <70%  Card: --bg-surface border --border radius --radius-md
+4.5  Assets Tab  [V1]
+┌─────────────────────────────────────────────────┐│  ⚡ StyleSnap     stripe.com        ⚙           │├─────────────────────────────────────────────────┤│  [Tokens] [Assets ─] [History]                  │├─────────────────────────────────────────────────┤│  23 assets    [All ▾]  [Images][SVGs][Icons]    ││                                                  ││  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐       ││  │      │  │  ~~~  │  │      │  │  SVG  │       ││  │  img │  │  SVG  │  │  img │  │ icon  │       ││  └──────┘  └──────┘  └──────┘  └──────┘       ││  240×80    48×48     800×400   24×24px          ││  [Copy URL][Copy URI][Copy URL][Copy URI]        ││                                                  ││  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐       ││  │      │  │      │  │      │  │      │        ││  └──────┘  └──────┘  └──────┘  └──────┘       ││                                                  ││  FAVICON                                        ││  ┌───┐  stripe.com  32×32  [Copy URL][Copy URI] ││  │ S │                                          ││  └───┘                                          ││                                                  ││  [↓ Download All as ZIP]                        │├─────────────────────────────────────────────────┤│  [⚡ Extract Full Page ────────]  [↓ Export ▾]  │└─────────────────────────────────────────────────┘  Grid: 4 cols, gap 8px, card 76×76px (img+icon 48px)  Hover: card bg --bg-hover, copy buttons appear     
+4.6  AI Prompt Tab  [V2]
+┌─────────────────────────────────────────────────┐│  ⚡ StyleSnap     stripe.com        ⚙           │├─────────────────────────────────────────────────┤│  [Tokens] [Comp.] [Assets] [✨AI ─] [History]  │├─────────────────────────────────────────────────┤│  Target AI Tool:                                 ││  ┌─────────────────────────────────────────┐   ││  │  ▸  Cursor                            ▾ │   ││  └─────────────────────────────────────────┘   ││                                                  ││  Generated Prompt:                               ││  ┌─────────────────────────────────────────┐   ││  │ # DESIGN SYSTEM — stripe.com            │   ││  │ > Extracted by StyleSnap v1.0 · Jul 2026│   ││  │                                         │   ││  │ ## Colours                              │   ││  │ --color-primary: #635BFF;               │   ││  │ --color-bg: #0A2540;                    │   ││  │ ...                                     │   ││  │ [scrollable, read-only textarea]        │   ││  │                                         │   ││  └─────────────────────────────────────────┘   ││  1,842 tokens estimated   [↑ Optimise]          ││                                                  ││  [Copy Prompt ✓]   [↓ Download .txt]            ││                                                  ││  Paste this prompt into Cursor's composer to    ││  use the extracted design system.               │├─────────────────────────────────────────────────┤│  [⚡ Extract Full Page ────────]  [↓ Export ▾]  │└─────────────────────────────────────────────────┘  Textarea: --bg-elevated, monospace 11px, read-only  Token count badge: amber pill if >2000 tokens   
+4.7  History Tab  [V1]
+┌─────────────────────────────────────────────────┐│  ⚡ StyleSnap                       ⚙           │├─────────────────────────────────────────────────┤│  [Tokens] [Assets] [History ─]                  │├─────────────────────────────────────────────────┤│  Past extractions (8)           [Clear all]     ││                                                  ││  ┌─────────────────────────────────────────┐   ││  │ [S] stripe.com            2h ago     [🗑]│   ││  │     Stripe · Payment processing         │   ││  │     42 colours · 6 fonts · 3 components │   ││  └─────────────────────────────────────────┘   ││                                                  ││  ┌─────────────────────────────────────────┐   ││  │ [L] linear.app            Yesterday  [🗑]│   ││  │     Linear · Project management         │   ││  │     28 colours · 2 fonts                │   ││  └─────────────────────────────────────────┘   ││                                                  ││  ┌─────────────────────────────────────────┐   ││  │ [V] vercel.com            3 days ago [🗑]│   ││  │     Vercel · Build & Deploy             │   ││  │     19 colours · 3 fonts                │   ││  └─────────────────────────────────────────┘   ││                                                  ││  + 5 more entries                               │├─────────────────────────────────────────────────┤│  [⚡ Extract Full Page ────────]  [↓ Export ▾]  │└─────────────────────────────────────────────────┘  Entry: bg --bg-surface, hover --bg-hover, click → load  Favicon: 20px square, radius 4px, fallback: initial  Delete: 🗑 appears on hover only (right-aligned)   
+4.8  Settings Panel  [V1]
+  ┌─────────────────────────────────────────────┐    │ ← Settings                                  │    ├─────────────────────────────────────────────┤    │                                             │    │  Theme                                      │    │  ● Dark   ○ Light   ○ System                │    │                                             │    │  Default export format                      │    │  ┌───────────────────────────────────────┐  │    │  │ DESIGN.md                           ▾ │  │    │  └───────────────────────────────────────┘  │    │                                             │    │  Default AI tool  (V2)                      │    │  ┌───────────────────────────────────────┐  │    │  │ Cursor                              ▾ │  │    │  └───────────────────────────────────────┘  │    │                                             │    │  Extraction limit                           │    │  DOM element sample:  ┌─────────┐           │    │                       │  2,000  │           │    │                       └─────────┘           │    │                                             │    │  ─────────────────────────────────────────  │    │                                             │    │  Data & Privacy                             │    │  [Clear all history]                        │    │  All data is stored locally in your browser.│    │  Nothing leaves your device.                │    │                                             │    │  StyleSnap v1.0.0  ·  Omenova Studio       │    └─────────────────────────────────────────────┘    Slides in from right over main content (translateX)  ← back arrow closes, returns to previous tab     
+4.9  Element Inspector On-Page Overlay  [V1]
+  ┌─────────────────────────────────────────────────────┐  │                  [ ACTIVE PAGE ]                    │  │                                                     │  │    ┌── ── ── ── ── ── ── ── ── ─┐                 │  │   ╔══════════════════════════════╗                  │  │   ║   Get started for free       ║  ← hovered elem │  │   ║   [btn-primary]              ║                  │  │   ╚══════════════════════════════╝                  │  │    └── ── ── ── ── ── ── ── ── ─┘                 │  │         ↑ indigo bounding box overlay               │  │                                                     │  └─────────────────────────────────────────────────────┘  ┌──────────────────────────────────────────────────┐    │  SIDE PANEL — ELEMENT SELECTED                   │    │  <button class="btn-primary">                    │    │                                                  │    │  background-color:  #635BFF  [Copy]             │    │  border-radius:     6px      [Copy]             │    │  font-weight:       600      [Copy]             │    │  padding:           12px 24px [Copy]            │    │  color:             #FFFFFF  [Copy]             │    │                                                  │    │  [Copy All CSS]  [Copy HTML]  [Inspect Again]   │    └──────────────────────────────────────────────────┘    Overlay: position:fixed, z-index:2147483647             Border: 2px solid #4F46E5 (--accent)                    Fill: rgba(79,70,229,0.08)                              Transition: top/left/width/height 80ms ease           
+4.10  Error States
+  ── EXTRACTION FAILED ────────────────────────────────    ┌─────────────────────────────────────────────────┐    │  ⚠                                             │    │  Could not extract this page                   │    │                                                 │    │  This page may be blocking scripts, or it      │    │  may still be loading.                         │    │                                                 │    │  [↺ Try again]                                 │    └─────────────────────────────────────────────────┘    ── RESTRICTED PAGE ─────────────────────────────────    ┌─────────────────────────────────────────────────┐    │  🔒 StyleSnap cannot run on this page.          │    │     Navigate to any website to extract.         │    └─────────────────────────────────────────────────┘    ── EXTRACTION INTERRUPTED ──────────────────────────    ┌─────────────────────────────────────────────────┐    │  ⚡ Extraction interrupted                      │    │  Saved at 55% — Design tokens extracted.        │    │  [↺ Retry from checkpoint]  [Start fresh]       │    └─────────────────────────────────────────────────┘    Icon size: 20px  |  Text: 13px --text-secondary        Error accent: --error (#EF4444)                        Retry button: primary (accent) on error screens      
+5. Component Library
+5.1  Buttons
+Variant
+Background
+Text / Border
+Used for
+Primary
+--accent (#4F46E5)
+#FFFFFF, no border
+Extract button, primary CTA, confirm actions
+Primary Hover
+--accent-hover (#4338CA)
+#FFFFFF
+Hover state of primary button
+Secondary
+transparent
+--accent, 1px border --accent
+Export button, secondary actions
+Ghost
+transparent
+--text-secondary, no border
+Cancel, close, minor actions
+Danger
+--error
+#FFFFFF
+Confirm delete (history entry)
+Disabled
+--bg-hover
+--text-muted, no border
+Any button when unavailable
+Icon-only
+transparent
+--text-secondary
+Settings gear, collapse panel
+Button height: 36px for standard, 32px for compact (action bar uses compact). Radius: --radius-sm (4px). Padding: 0 16px (standard), 0 8px (compact icon-only). Font: Inter 600 13px.
+5.2  Colour Swatch Card
+  ┌────────────────────────────────────────┐        │ ┌────┐                                 │        │ │    │ #635BFF                   847 │ │        │ │    │ Electric Indigo          [Copy]│ │        │ └────┘ hsl(252 95% 68%)   PRIMARY    │ │        └────────────────────────────────────────┘        Swatch: 28×28px, radius 4px, 1px --border         Hex value: JetBrains Mono 12px --accent            Name: Inter 600 12px --text-primary                HSL: Inter 400 11px --text-secondary               Role badge: Inter 500 10px, --accent-subtle bg     Frequency: Inter 400 11px --text-muted (right)     Copy button: appears on card hover               
+5.3  Typography Specimen Row
+  ┌────────────────────────────────────────┐        │  Sohne           Sans-serif      [Copy]│        │  Aa   (Sohne, 32px Bold)               │        │  Sizes: 64 · 48 · 36 · 24 · 20 · 16px │        │  Used: Headings H1-H6                  │        └────────────────────────────────────────┘        "Aa": rendered in the actual detected font         Size scale chips: pill shape, --bg-elevated bg   
+5.4  Spacing Visualiser
+  4px  [■]                                          8px  [■■]                                         12px [■■■]                                        16px [■■■■]                                       24px [■■■■■■]                                     48px [■■■■■■■■■■■■]                               Bar segments: --accent fill, height 6px, radius 2px  Label: JetBrains Mono 11px --text-secondary     
+5.5  Component Card (Components Tab)
+  ┌──────────────────────────────────────────┐      │ BUTTON                     ● 97%  ×24   │      │ ─────────────────────────────────────── │      │ <button class="btn btn-primary">         │      │   Get started                            │      │ </button>                                │      │ ─────────────────────────────────────── │      │ background-color: #635BFF;               │      │ border-radius: 6px;                      │      │ padding: 12px 24px;                      │      │                     [Copy HTML] [Copy CSS│      └──────────────────────────────────────────┘      Card bg: --bg-surface, border 1px --border        Radius: --radius-md (8px)                         Label: Inter 700 13px uppercase --text-primary    Confidence dot: 8px circle (green/amber/red)      Instance count: ×24 — --text-muted 11px           Code: JetBrains Mono 11px --text-secondary        Copy buttons: ghost, 32px height                
+5.6  Asset Card
+  ┌──────────┐  ← 76×76px card, radius --radius-md    │          │                                         │  [image] │  On hover:                              │          │  ┌──────────┐                           └──────────┘  │  240×80  │                                         │ SVG / PNG│                                         │[Copy URL]│ ← appears overlay                      └──────────┘                           Thumbnail: object-fit:cover                         Type badge: top-right absolute, --bg-base 80% op    Dimensions: bottom center, 10px --text-muted      
+5.7  Toast Notification
+                   ┌───────────────────────────┐                       │  ✓  DESIGN.md copied      │                       └───────────────────────────┘      Position: bottom-right of side panel, 16px margin    Width: max-content (not full width)                  bg: --bg-elevated  |  border-left: 4px --success    Radius: --radius-md                                 Animation: slide-up 200ms ease-out on show,                    fade-out 300ms ease-in on auto-dismiss    Auto-dismiss: 3 seconds                             Error toast: border-left --error instead          
+5.8  Progress Bar
+  ████████████████████████████░░░░░░░░  75%           Analysing design tokens...                          Track: --border bg, height 4px, radius 9999px       Fill: --accent, animated width transition            Shimmer: linear-gradient overlay, 1.5s loop         Label: 11px --text-secondary italic, 4px below bar  Percentage: 11px --accent bold, right-aligned      
+5.9  Dropdown / Select
+  ┌───────────────────────────────────────────┐      │  ▸  Cursor                              ▾ │      └───────────────────────────────────────────┘      On open:                                            ┌───────────────────────────────────────────┐      │  ✓  Cursor              (selected)        │      │     Claude Code                            │      │     v0                                     │      │     Bolt                                   │      │     Lovable                                │      └───────────────────────────────────────────┘      Trigger: --bg-elevated, 1px --border, 36px height    Dropdown: --shadow-md, --bg-elevated, z-index:50    Item height: 32px  |  hover: --bg-hover             Selected item: --accent text + check icon         
+6. Interaction States
+6.1  Copy Confirmation Pattern
+Every copy button follows the same 3-state pattern. This is the primary micro-interaction in the extension.
+State
+Icon
+Colour
+Duration
+Default
+Copy (Lucide)
+--text-secondary
+Persistent
+Hover
+Copy (Lucide)
+--text-primary
+While hovered
+Copied
+Check (Lucide)
+--success (#10B981)
+1,500ms then resets
+Error
+X (Lucide)
+--error (#EF4444)
+2,000ms then resets
+6.2  Skeleton Loading States
+During EXTRACTING state, content areas show skeleton placeholders instead of blank space. Skeletons match the approximate shape of their target content.
+Colour swatch skeletons: 28×28px square + two lines at different widths
+Typography skeletons: one wide line + three narrower lines
+Spacing visualiser skeleton: one line at full width
+Component card skeletons: full card height rectangle (approx 120px)
+All skeletons use a CSS shimmer animation — a linear-gradient that moves left-to-right over 1.5 seconds in an infinite loop. Background: --bg-elevated. Shimmer colour: slightly lighter (+5% lightness).
+6.3  Hover State Specifications
+Element
+Hover bg
+Additional change
+History entry
+--bg-hover
+Delete icon appears (opacity 0→1, 150ms)
+Asset card
+--bg-hover (overlay)
+Copy buttons slide up from bottom (translateY 4px→0)
+Colour swatch card
+--bg-hover
+Copy button appears top-right
+Tab item
+--bg-hover
+Text colour → --text-primary
+Component card
+no change
+Border colour → --accent (was --border)
+Token value row
+--bg-hover
+Copy icon appears right-aligned
+6.4  Focus States (Keyboard Navigation)
+All interactive elements must have a visible focus ring for keyboard accessibility. The focus ring style is consistent across all elements:
+outline: 2px solid var(--accent);outline-offset: 2px;border-radius: var(--radius-sm); /* matches element radius */
+Tab order within the panel: Header icons → Tab bar → Content area (scrollable) → Action bar buttons.
+7. Theme System
+7.1  Implementation Strategy
+Theme is implemented via CSS custom properties on the :root element of the side panel's shadow DOM. Switching theme = swapping the token values. No class toggling. No JS style manipulation beyond the single data-theme attribute.
+:root[data-theme="dark"] {  --bg-base:       #0F0F11;  --bg-surface:    #1A1A1F;  --bg-elevated:   #222228;  --bg-hover:      #2A2A32;  --border:        #2D2D35;  --text-primary:  #F9FAFB;  --text-secondary:#9CA3AF;  --text-muted:    #4B5563;  --accent:        #4F46E5;  --accent-hover:  #4338CA;  --accent-subtle: #1E1B4B;  --success:       #10B981;  --warning:       #F59E0B;  --error:         #EF4444;}:root[data-theme="light"] {  --bg-base:       #FFFFFF;  --bg-surface:    #F9FAFB;  --bg-elevated:   #F3F4F6;  --bg-hover:      #E5E7EB;  --border:        #E5E7EB;  --text-primary:  #111827;  --text-secondary:#6B7280;  --text-muted:    #9CA3AF;  --accent:        #4F46E5;  --accent-hover:  #4338CA;  --accent-subtle: #EEF2FF;  /* success / warning / error unchanged */}
+7.2  System Theme Detection
+// In store.ts — on mount:const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;const storedTheme = await chrome.storage.local.get("settings");const theme = storedTheme?.settings?.theme ?? "system";const resolved = theme === "system" ? (prefersDark ? "dark" : "light") : theme;document.documentElement.setAttribute("data-theme", resolved);// Listen for OS theme changes:window.matchMedia("(prefers-color-scheme: dark)")  .addEventListener("change", (e) => {    if (useStore.getState().theme === "system") {      document.documentElement.setAttribute("data-theme", e.matches ? "dark" : "light");    }  });
+8. Animations & Transitions
+StyleSnap uses minimal, purposeful animation. No decorative motion. Every animation serves a functional purpose (indicate state change, confirm action, guide attention).
+Element / Transition
+Duration
+Easing
+Purpose
+Inspector overlay repositioning
+80ms
+ease
+Smooth hover tracking without lag
+Toast slide-in
+200ms
+ease-out
+Draw attention to confirmation
+Toast fade-out
+300ms
+ease-in
+Graceful dismissal
+Copy icon → Check icon
+150ms
+ease
+Confirm copy without toast
+Settings panel slide-in
+250ms
+ease-out
+Contextual reveal (not a new page)
+Skeleton shimmer
+1,500ms
+linear, infinite
+Indicate loading without progress bar
+Progress bar fill
+300ms
+ease-out
+Smooth checkpoint transitions
+Asset copy buttons slide-up
+150ms
+ease-out
+Surface actions on hover
+Delete icon fade-in (history)
+150ms
+ease
+Reduce visual noise at rest
+Tab active indicator
+200ms
+ease
+Confirm tab switch
+All transitions must respect prefers-reduced-motion. If the user has reduced motion enabled, all transition durations drop to 0ms (instant). The shimmer animation is replaced with a static pulse (opacity: 0.5 → 1 → 0.5).
+9. Accessibility Requirements
+9.1  Colour Contrast
+Text / Background combination
+Dark theme ratio
+Light theme ratio
+WCAG target
+--text-primary on --bg-base
+15.8:1
+19.1:1
+AA (4.5:1) ✅
+--text-secondary on --bg-base
+7.2:1
+5.9:1
+AA (4.5:1) ✅
+#FFFFFF on --accent (#4F46E5)
+4.6:1
+4.6:1
+AA (4.5:1) ✅
+--text-muted on --bg-base
+3.1:1 ⚠
+3.8:1 ⚠
+Large text only (18px+)
+--text-muted is only used for placeholder text and tooltips (never for important information), so the 3:1 large-text threshold is acceptable. All important content uses --text-primary or --text-secondary.
+9.2  ARIA Labels — Key Elements
+Element
+ARIA attribute
+Extract button
+aria-label="Extract design system from current page"
+Export dropdown
+aria-haspopup="listbox" aria-expanded="true/false"
+Progress bar
+role="progressbar" aria-valuenow={pct} aria-valuemin="0" aria-valuemax="100"
+Colour swatch
+aria-label="Primary colour: #635BFF (Electric Indigo)"
+Copy button (per token)
+aria-label="Copy hex value #635BFF"
+Delete history entry
+aria-label="Delete extraction for stripe.com"
+Inspector overlay
+aria-hidden="true" (decorative visual only)
+Tab bar
+role="tablist" | each tab: role="tab" aria-selected="true/false"
+Content area per tab
+role="tabpanel" aria-labelledby="{tab-id}"
+9.3  Keyboard Navigation
+Tab / Shift+Tab: cycle through all interactive elements in DOM order
+Arrow keys: navigate within tab bar (left/right), within dropdown list (up/down)
+Enter / Space: activate focused button, select dropdown item
+Escape: close dropdown, deactivate inspector, close settings panel
+Ctrl+C / Cmd+C: when a copy button is focused and Enter is pressed, copy fires
+10. Layout Edge Cases
+10.1  Panel Width Behaviour
+The Chrome Side Panel can be resized by the user (drag the divider between the panel and the page). StyleSnap must remain usable at all widths from 280px (minimum Chrome allows) to 600px (wide enough for two columns).
+Width range
+Layout adaptation
+280–340px
+Tab labels hidden, icons only in tab bar. Export dropdown truncates label. Colour swatches reduce to 2-column grid.
+340–480px
+Default layout as designed. All labels visible.
+480–600px
+Colour swatch grid expands to 3 columns. Component cards allow slightly wider HTML preview.
+600px+
+Max-width cap at 600px — content centres; padding increases.
+10.2  Long Content Handling
+Page titles longer than 40 characters: truncate with ellipsis in header
+Hex values: never wrap — always monospace single-line
+Component HTML: max-height 120px with overflow:auto (scrollable code block)
+History entry URL: truncate to 36 chars + ellipsis
+Font family names: wrap allowed (some system fonts have long names)
+Colour names: truncate at 24 chars
+11. Document History
+Version
+Date
+Author
+Changes
+v1.0
+July 2026
+Guru (Soham Belwadkar)
+Initial UI/UX spec — design system, all screens, component library, theming, accessibility

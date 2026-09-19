@@ -250,3 +250,107 @@ module.exports = {
 };
 `;
 }
+
+// 4. Agent-Ready SKILL.md Generator (For Claude Code, Antigravity, Cursor)
+export function generateSkillMD(result: ExtractionResult): string {
+  const { tokens } = result;
+  const domain = new URL(result.url).hostname.replace(/^www\./, "");
+  const title = result.title.replace(/[\n\r]+/g, " ").trim();
+
+  let skill = `---
+name: ${kebabCase(domain)}-design-system
+description: Apply the design system, colors, typography, and UI rules of ${domain} (${title}). Use this skill whenever building or styling UI elements that should match this website.
+---
+
+# ${title} — Design System Skill
+
+> Extracted from [${result.url}](${result.url}) using StyleSnap v${result.version}.
+> ${tokens.themeSummary || "Complete design tokens and layout conventions for AI coding agents."}
+
+## Overview & Activation Rules
+When creating or modifying components for this project:
+- **STRICTLY USE** the extracted color palette and spacing scale below.
+- **NEVER** use default browser colors (pure red hex #ff0000, plain blue hex #0000ff) or unconfigured Tailwind classes.
+- **ENFORCE ACCESSIBILITY**: Maintain strong color contrast ratio against background elements.
+
+---
+
+## 1. CSS Custom Properties (:root)
+Paste these CSS variables into your global stylesheet (e.g. \`globals.css\` or \`index.css\`):
+
+\`\`\`css
+:root {
+`;
+
+  for (const c of tokens.colors) {
+    const varName = c.cssVarName || `--color-${kebabCase(c.suggestedName)}`;
+    skill += `  ${varName}: ${c.hex};\n`;
+  }
+
+  skill += `}\n\`\`\`\n\n`;
+
+  // Colors section
+  skill += `## 2. Color Palette Rules\n\n`;
+  skill += `| Semantic Role | Suggested Name | Hex | HSL | Context |\n`;
+  skill += `|---------------|----------------|-----|-----|---------|\n`;
+  for (const c of tokens.colors) {
+    skill += `| \`${c.semanticGroup}\` | ${c.suggestedName} | \`${c.hex}\` | \`${c.hsl}\` | ${c.contexts.join(", ")} |\n`;
+  }
+  skill += `\n`;
+
+  // Do's and Don'ts for Colors
+  skill += `### Color Do's & Don'ts\n`;
+  skill += `- ✅ **DO** use primary background colors for container surfaces.\n`;
+  skill += `- ✅ **DO** use the designated accent colors for interactive CTAs, active tab highlights, and hover states.\n`;
+  skill += `- ❌ **DON'T** introduce arbitrary hex values outside of this curated palette.\n\n`;
+
+  // Typography section
+  skill += `## 3. Typography & Font Stacks\n\n`;
+  if (tokens.typography.families.length > 0) {
+    for (const f of tokens.typography.families) {
+      skill += `- **${f.name}** (\`${f.category}\`): \`${f.stack}\` (Weights: ${f.weights.join(", ")})\n`;
+    }
+    skill += `\n`;
+  }
+
+  skill += `### Type Scale\n\n`;
+  skill += `| Role | Size | Weight | Line Height |\n`;
+  skill += `|------|------|--------|-------------|\n`;
+  for (const entry of tokens.typography.scale) {
+    skill += `| \`${entry.role}\` | ${entry.fontSize} | ${entry.fontWeight} | ${entry.lineHeight} |\n`;
+  }
+  skill += `\n`;
+
+  // Spacing section
+  skill += `## 4. Spacing & Layout Grid\n\n`;
+  skill += `- **Base Grid Unit:** ${tokens.spacing.baseUnit}px\n`;
+  skill += `- **Extracted Scale Values:** ${tokens.spacing.values.map(v => `\`${v.px}px\``).join(", ")}\n\n`;
+
+  // Shadows & Radii
+  skill += `## 5. Visual Hierarchy & Borders\n\n`;
+  if (tokens.radii.length > 0) {
+    skill += `### Border Radius\n`;
+    for (const r of tokens.radii) {
+      skill += `- \`${r.level}\`: \`${r.value}\` (${r.valuePx}px)\n`;
+    }
+    skill += `\n`;
+  }
+
+  if (tokens.shadows.length > 0) {
+    skill += `### Elevation & Shadows\n`;
+    for (const sh of tokens.shadows) {
+      skill += `- \`${sh.level}\`: \`${sh.value}\`\n`;
+    }
+    skill += `\n`;
+  }
+
+  // Guidelines for AI Agents
+  skill += `## 6. Guidelines for AI Coding Agents (Claude Code, Antigravity, Cursor)
+1. **Component Scoping**: Wrap all custom styles inside clean utility classes or CSS module tokens.
+2. **Animation & Interactions**: Ensure smooth 150ms-200ms ease-in-out transitions on hover/focus state changes.
+3. **Responsive Design**: Respect the extracted breakpoints (${tokens.breakpoints.map(b => `${b.label}: ${b.px}px`).join(", ")}).
+`;
+
+  return skill;
+}
+

@@ -1,0 +1,251 @@
+StyleSnap
+Chrome Extension
+Backend Schema Document  ·  v1.0
+Author  Guru (Soham Belwadkar)
+Status  Draft v1.0
+Date  July 2026
+Companion to  StyleSnap PRD + TRD + Extension Flow + UI/UX Spec
+Product  Omenova Studio
+1. Overview
+StyleSnap has no external backend server. All data lives in the browser. This document defines every data structure, storage schema, message payload type, and export format schema used by the extension — collectively referred to as the "backend schema."
+Three gaps identified in the TRD are fully resolved in this document:
+Export generation transformation logic — the exact functions that convert ExtractionResult into each export format
+IndexedDB cascade delete / eviction logic — what happens to child records when a parent extraction is removed
+ZIP packaging pipeline — exact folder structure, naming conventions, and file manifest
+Storage tier
+Technology
+What lives there
+Tier 1
+chrome.storage.local
+Settings, history index (references only), schema version
+Tier 2
+IndexedDB (idb v8)
+Full ExtractionResult payloads, screenshot blobs, component data
+Tier 3 (ephemeral)
+chrome.storage.session
+Extraction checkpoints during long operations — cleared on browser close
+2. Root Data Model — ExtractionResult
+ExtractionResult is the central data model. It is produced by the content script, relayed through the service worker, stored in IndexedDB, and consumed by every export generator. All other schema types are nested within it or reference it by id.
+interface ExtractionResult {  // ── Identity ──────────────────────────────────────────────  id:          string;          // UUID v4 — primary key in IndexedDB  url:         string;          // Full URL of the extracted page  origin:      string;          // e.g. "https://stripe.com"  title:       string;          // document.title at time of extraction  favicon:     string;          // data URI (PNG, ≤4KB) or empty string  timestamp:   number;          // Unix ms — Date.now() at extraction start  duration:    number;          // Extraction time in ms  version:     string;          // StyleSnap version that produced this — e.g. "1.0.0"  // ── Core payload ──────────────────────────────────────────  tokens:      DesignTokens;    // Full design token set (always present)  assets:      AssetManifest;   // Images, SVGs, icons, favicon (always present)  // ── V2 additions ──────────────────────────────────────────  layout?:     LayoutStructure; // Section-by-section page structure  components?: Component[];     // Detected UI components  // ── V3 addition ───────────────────────────────────────────  animations?: AnimationReport; // Detected animation/scroll libraries  // ── Metadata ──────────────────────────────────────────────  warnings:    string[];        // Non-fatal issues (e.g. cross-origin sheet skipped)  confidence:  number;          // 0–1 overall extraction confidence score  detectedFramework: FrameworkType;}type FrameworkType = "vanilla" | "tailwind" | "tailwind-v4" | "css-in-js"                   | "styled-components" | "emotion" | "unknown";
+3. Design Token Schema
+3.1  DesignTokens (root)
+interface DesignTokens {  colors:      ColorToken[];  typography:  TypographySystem;  spacing:     SpacingScale;  shadows:     ShadowToken[];  radii:       RadiusToken[];  breakpoints: BreakpointToken[];  cssVariables: Record<string, string>;  // raw --custom-props from :root / *  zIndex:      ZIndexToken[];}
+3.2  ColorToken
+interface ColorToken {  id:            string;      // UUID v4 — stable ref across exports  value:         string;      // Normalized hex: "#4F46E5"  hex:           string;      // Same as value (explicit alias)  hsl:           string;      // "hsl(243 75% 59%)"  rgb:           string;      // "rgb(79, 70, 229)"  opacity:       number;      // 0–1 (1 = fully opaque)  frequency:     number;      // Count of DOM elements using this colour  contexts:      ColorContext[];  semanticGroup: SemanticGroup;  cssVarName?:   string;      // "--color-primary" if sourced from a CSS variable  suggestedName: string;      // Auto-named: "Electric Indigo", "Midnight Navy" etc.}type ColorContext = "background" | "text" | "border" | "fill" | "outline" | "shadow";type SemanticGroup = "primary" | "secondary" | "accent" | "neutral"                   | "semantic-success" | "semantic-warning" | "semantic-error"                   | "surface" | "unknown";
+Color naming uses a curated lookup table of 2,000+ common design colour names matched by HSL proximity (±8° hue, ±15% sat/light). Falls back to "Colour {index}" if no match found within threshold.
+3.3  TypographySystem
+interface TypographySystem {  families:   FontFamily[];  scale:      TypeScaleEntry[];   // Deduplicated size+weight combos  lineHeights: string[];          // Unique line-height values  letterSpacings: string[];       // Unique letter-spacing values}interface FontFamily {  name:       string;    // "Inter" (cleaned, no quotes)  stack:      string;    // Full stack: "Inter, system-ui, sans-serif"  category:   FontCategory;  weights:    number[];  // [400, 500, 600, 700] — unique weights found in DOM  frequency:  number;    // Element count using this family}type FontCategory = "sans-serif" | "serif" | "monospace" | "display" | "unknown";interface TypeScaleEntry {  role:         TypeRole;          // "h1" | "body" | "caption" etc.  fontSize:     string;            // "3rem" | "48px"  fontSizePx:   number;            // 48 (always px for consistent comparison)  fontWeight:   string;            // "700"  lineHeight:   string;            // "1.2" | "57.6px"  letterSpacing:string;            // "0px" | "-0.02em"  fontFamily:   string;            // Primary family name  frequency:    number;}type TypeRole = "h1"|"h2"|"h3"|"h4"|"h5"|"h6"|"body"|"body-sm"              |"caption"|"micro"|"code"|"label"|"unknown";
+3.4  SpacingScale
+interface SpacingScale {  values:    SpacingValue[];    // All unique spacing values found, sorted asc  baseUnit:  number;            // Detected grid base in px (4 | 5 | 8 | 10)  isGrid:    boolean;           // True if values follow geometric progression  anomalies: number[];          // Values that don't fit the grid}interface SpacingValue {  px:        number;            // e.g. 16  rem:       string;            // "1rem"  token:     string;            // "space-4" (based on grid unit)  frequency: number;            // DOM occurrence count}
+3.5  ShadowToken
+interface ShadowToken {  value:     string;      // Full CSS value: "0 4px 12px rgba(0,0,0,0.1)"  level:     ElevLevel;   // Normalised elevation level  blurPx:    number;      // Parsed blur-radius in px  spreadPx:  number;      // Parsed spread in px  colorRgba: string;      // Parsed shadow colour  frequency: number;}type ElevLevel = "none"|"xs"|"sm"|"md"|"lg"|"xl"|"2xl";
+3.6  RadiusToken
+interface RadiusToken {  value:     string;      // "8px" | "50%"  valuePx:   number;      // 8 (normalised; "50%" → -1 as sentinel)  level:     RadiusLevel;  frequency: number;}type RadiusLevel = "none"|"sm"|"md"|"lg"|"xl"|"full";
+3.7  BreakpointToken & ZIndexToken
+interface BreakpointToken {  px:    number;    // 768  em:    string;    // "48em"  label: string;    // "sm" | "md" | "lg" | "xl" — inferred from value}interface ZIndexToken {  value:     number;   // 10 | 100 | 9999  frequency: number;  contexts:  string[]; // Tags describing usage: "modal" | "dropdown" | "overlay"}
+4. Component Schema  [V2]
+interface Component {  id:            string;          // UUID v4  label:         ComponentLabel;  // "button" | "card" | "nav" | ...  confidence:    number;          // 0–1 cumulative signal score  instanceCount: number;          // How many times pattern found on page  signals:       DetectionSignal[];// Which signals fired  // Extracted code  html:          string;          // outerHTML of representative instance (≤4KB)  css:           string;          // Scoped non-default computed CSS  selector:      string;          // Best CSS selector for this component  // Geometry  boundingBox:   BoundingBox;     // Of representative instance  hasChildren:   boolean;  childCount:    number;  // Classification  isUncertain:   boolean;         // true if confidence 0.45–0.59  ariaRole?:     string;          // If ARIA role was the detection trigger  tagName:       string;          // "button" | "div" | "nav" etc.}type ComponentLabel = "button"|"card"|"nav"|"header"|"footer"|"form"                    | "input"|"modal"|"dialog"|"badge"|"chip"|"avatar"                    | "hero"|"table"|"list"|"dropdown"|"tab"|"unknown";interface DetectionSignal {  type:   SignalType;  score:  number;   // Contribution to confidence (0.15–0.35)  detail: string;   // e.g. "tagName=button" | "role=navigation"}type SignalType = "semantic-html" | "aria-role" | "repeated-structure" | "class-heuristic";interface BoundingBox {  top: number; left: number; width: number; height: number;}
+5. Layout Structure Schema  [V2]
+interface LayoutStructure {  maxContentWidth: string;     // "1280px" | "90vw" — widest container found  baseGrid:        GridInfo;  sections:        PageSection[];}interface GridInfo {  type:        "css-grid" | "flexbox" | "mixed" | "unknown";  columns?:    string;   // "repeat(12, 1fr)" | "1fr 2fr 1fr"  gap?:        string;   // "24px"  columnCount: number;   // 12 | 3 | 2 etc.}interface PageSection {  id:              string;       // UUID — references section screenshot  label:           SectionLabel;  tagName:         string;  layoutType:      "flex" | "grid" | "block" | "absolute" | "mixed";  flexDirection?:  string;       // "row" | "column"  flexWrap?:       string;  gridCols?:       string;       // CSS grid-template-columns value  gap?:            string;  padding:         string;       // Shorthand: "80px 24px"  backgroundColor: string;       // Hex  minHeight:       string;       // "600px" | "auto"  order:           number;       // Top-to-bottom order on page (0-indexed)  screenshotId?:   string;       // References SectionShot.label in IndexedDB}type SectionLabel = "navigation"|"hero"|"features"|"testimonials"|"pricing"  | "cta"|"footer"|"sidebar"|"content"|"gallery"|"faq"|"team"|"unknown";
+6. Animation Report Schema  [V3]
+interface AnimationReport {  detectedAt:  number;           // Unix ms  injectionMethod: "main-world" | "dom-only" | "timeout-fallback";  libraries:   LibraryDetection[];  hasVanillaScroll: boolean;     // IntersectionObserver / rAF scroll detected  hasWebGL:    boolean;  overallTier: 1 | 2 | 3;       // Lowest tier (worst accuracy) across all libs  summary:     string;           // Human-readable description for export}interface LibraryDetection {  library:    AnimationLibrary;  detected:   boolean;  version?:   string;            // "3.12.5"  tier:       1 | 2 | 3;  config?:    GSAPConfig | AOSConfig | LenisConfig            | LocomotiveConfig | FramerMotionConfig            | ScrollMagicConfig | ThreeConfig;  description: string;           // Ready-to-export written description}type AnimationLibrary = "gsap" | "gsap-scrolltrigger" | "framer-motion"  | "aos" | "lenis" | "locomotive-scroll" | "scrollmagic" | "three-js";
+GSAP + ScrollTrigger Config
+interface GSAPConfig {  version:    string;  hasScrollTrigger: boolean;  triggers:   ScrollTriggerInstance[];  globalTimeline: { timeScale: number; paused: boolean; };}interface ScrollTriggerInstance {  id:          number;  trigger:     string;    // CSS selector of trigger element  start:       string;    // "top top"  end:         string;    // "+=800"  scrub:       boolean | number;  // false | 1.2  pin:         boolean | string;  toggleClass?: string;  markers:     boolean;  once:        boolean;  ease?:       string;    // "power2.out"}
+AOS Config
+interface AOSConfig {  version:     string;  options:     { duration: number; easing: string; offset: number; once: boolean; };  elements:    AOSElement[];}interface AOSElement {  animation: string;   // "fade-up" | "zoom-in" etc.  duration?: number; offset?: number; delay?: number; easing?: string;  count:     number;   // How many elements use this exact combo}
+Lenis & Locomotive Scroll Configs
+interface LenisConfig {  version:      string;  duration:     number;   // e.g. 1.2  easing:       string;   // Function name or description  smoothWheel:  boolean;  infinite:     boolean;}interface LocomotiveConfig {  version?:     string;  smooth:       boolean;  elements:     LocomotiveElement[];}interface LocomotiveElement {  speed?:    string;   // data-scroll-speed value  direction?:string;   // data-scroll-direction  delay?:    string;  count:     number;}interface ThreeConfig {  revision:    string;   // THREE.REVISION  canvasCount: number;  webglVersion: number;  // 1 | 2}
+7. Asset Manifest Schema
+interface AssetManifest {  images:      ImageAsset[];  svgs:        SVGAsset[];  favicon?:    FaviconAsset;  totalCount:  number;}interface ImageAsset {  id:          string;        // UUID v4 — used as filename in ZIP  src:         string;        // Original URL (absolute)  alt:         string;  naturalWidth:number;  naturalHeight:number;  type:        "img" | "picture" | "css-background";  mimeType:    string;        // "image/png" | "image/webp" etc.  srcset?:     string;        // Raw srcset attribute if present  sizeEstimate:number;        // Bytes (from Content-Length or dimensions estimate)}interface SVGAsset {  id:          string;  src?:        string;        // URL if external SVG; absent for inline  inline:      boolean;       // true if <svg> element in DOM  svgContent:  string;        // Serialized SVG markup (≤100KB)  width:       number;  height:      number;  isIcon:      boolean;       // true if width+height ≤ 48px}interface FaviconAsset {  href:        string;  type:        string;        // "image/png" | "image/svg+xml"  sizes?:      string;        // "32x32" | "any"  dataUri:     string;        // Base64 encoded (always fetched and inlined)}
+8. Storage Schemas
+8.1  chrome.storage.local Keys
+chrome.storage.local uses a flat key-value store. StyleSnap uses three top-level keys:
+// Key: "stylesnap_settings"interface Settings {  schemaVersion:      number;         // Storage schema version — for migrations  theme:              "dark" | "light" | "system";  defaultExportFormat: ExportFormat;  defaultAITool:      AITool;         // [V2]  domSampleLimit:     number;         // 500–3000, default 2000  enableAnimationDetection: boolean;  // [V3] default true  installedAt:        number;         // Unix ms — first install timestamp  lastOpenedAt:       number;         // Unix ms — last panel open}type ExportFormat = "design-md" | "tokens-json" | "tailwind-config"                  | "components-md" | "master-prompt" | "assets-zip";type AITool = "cursor" | "claude-code" | "v0" | "bolt" | "lovable";// Key: "stylesnap_history"interface HistoryStore {  entries: HistoryEntry[];  // Max 10, newest first (FIFO eviction)}interface HistoryEntry {  id:             string;   // UUID — matches ExtractionRecord.id in IndexedDB  url:            string;  origin:         string;  title:          string;  faviconDataUri: string;   // Inline favicon (≤4KB data URI)  timestamp:      number;  durationMs:     number;  colorCount:     number;  fontCount:      number;  componentCount: number;   // 0 at V1  hasScreenshots: boolean;  // Whether screenshots stored in IndexedDB  version:        string;   // StyleSnap version that created this}// Key: "stylesnap_checkpoint"  (chrome.storage.session — ephemeral)interface ExtractionCheckpoint {  extractionId: string;  tabId:        number;  phase:        1 | 2 | 3 | 4;   // Last completed phase  pct:          number;            // Last reported progress %  partialResult:Partial<ExtractionResult>;  savedAt:      number;}
+8.2  IndexedDB Schema
+Database name: "stylesnap-db"  |  Version: 1  |  Library: idb v8
+// Object Store: "extractions"// keyPath: "id"  |  Indexes: ["url", "timestamp", "origin"]interface ExtractionRecord {  id:        string;          // UUID — PK  url:       string;          // Indexed  origin:    string;          // Indexed  timestamp: number;          // Indexed  result:    ExtractionResult; // Full payload (can be 200KB–2MB)}// Object Store: "screenshots"  [V2]// keyPath: "id"  |  No additional indexesinterface ScreenshotRecord {  id:        string;          // Same UUID as ExtractionRecord.id (1:1)  fullPage:  Blob;            // Full-page stitched PNG  sections:  SectionShot[];   // Per-section crops  createdAt: number;  totalSize: number;          // Sum of blob sizes in bytes}interface SectionShot {  sectionId: string;   // Matches PageSection.id  label:     string;   // "hero" | "navigation" etc.  blob:      Blob;  width:     number;  height:    number;}
+8.3  IndexedDB Initialisation
+import { openDB, DBSchema, IDBPDatabase } from "idb";interface StyleSnapDB extends DBSchema {  extractions: {    key: string;    value: ExtractionRecord;    indexes: { "by-url": string; "by-timestamp": number; "by-origin": string; };  };  screenshots: {    key: string;    value: ScreenshotRecord;  };}export async function openStyleSnapDB(): Promise<IDBPDatabase<StyleSnapDB>> {  return openDB<StyleSnapDB>("stylesnap-db", 1, {    upgrade(db, oldVersion) {      if (oldVersion < 1) {        const exStore = db.createObjectStore("extractions", { keyPath: "id" });        exStore.createIndex("by-url",       "url",       { unique: false });        exStore.createIndex("by-timestamp", "timestamp", { unique: false });        exStore.createIndex("by-origin",    "origin",    { unique: false });        db.createObjectStore("screenshots", { keyPath: "id" });      }      // Future versions add upgrade blocks here (oldVersion < 2, etc.)    },  });}
+9. IndexedDB Operations & Cascade Delete
+This section patches TRD Gap #2: the exact eviction / cascade delete logic was not specced in the TRD. It is fully defined here.
+9.1  Save Extraction (with History Eviction)
+export async function saveExtraction(  result: ExtractionResult,  db: IDBPDatabase<StyleSnapDB>): Promise<void> {  // 1. Write to IndexedDB  await db.put("extractions", {    id: result.id, url: result.url,    origin: result.origin, timestamp: result.timestamp,    result,  });  // 2. Update chrome.storage.local history index  const storage = await chrome.storage.local.get("stylesnap_history");  const history: HistoryStore = storage.stylesnap_history ?? { entries: [] };  const newEntry: HistoryEntry = buildHistoryEntry(result);  history.entries.unshift(newEntry);  // Prepend (newest first)  // 3. EVICTION: if > 10 entries, remove oldest  if (history.entries.length > 10) {    const evicted = history.entries.splice(10);  // Remove from index 10 onwards    // 4. CASCADE DELETE: remove evicted records from IndexedDB    await Promise.all(evicted.map(entry => cascadeDelete(entry.id, db)));  }  await chrome.storage.local.set({ stylesnap_history: history });}
+9.2  Cascade Delete
+export async function cascadeDelete(  id: string,  db: IDBPDatabase<StyleSnapDB>): Promise<void> {  // Delete in a single transaction for atomicity  const tx = db.transaction(["extractions", "screenshots"], "readwrite");  await Promise.all([    tx.objectStore("extractions").delete(id),    tx.objectStore("screenshots").delete(id),  // No-op if no screenshots  ]);  await tx.done;}// Called from: history eviction, user-initiated delete, "Clear all history"export async function clearAllHistory(  db: IDBPDatabase<StyleSnapDB>): Promise<void> {  const tx = db.transaction(["extractions", "screenshots"], "readwrite");  await Promise.all([    tx.objectStore("extractions").clear(),    tx.objectStore("screenshots").clear(),  ]);  await tx.done;  await chrome.storage.local.set({ stylesnap_history: { entries: [] } });}
+9.3  Load Extraction (History Tap)
+export async function loadExtraction(  id: string,  db: IDBPDatabase<StyleSnapDB>): Promise<ExtractionResult | null> {  const record = await db.get("extractions", id);  return record?.result ?? null;}// Load all extractions for a given origin (for history grouping)export async function loadByOrigin(  origin: string,  db: IDBPDatabase<StyleSnapDB>): Promise<ExtractionRecord[]> {  return db.getAllFromIndex("extractions", "by-origin", origin);}
+10. Message Protocol Schema
+10.1  MessageType Enum
+const enum MessageType {  // Extraction lifecycle  EXTRACT_PAGE            = "EXTRACT_PAGE",  EXTRACTION_PROGRESS     = "EXTRACTION_PROGRESS",  EXTRACTION_COMPLETE     = "EXTRACTION_COMPLETE",  EXTRACTION_ERROR        = "EXTRACTION_ERROR",  EXTRACTION_TIMEOUT      = "EXTRACTION_TIMEOUT",  // Inspector  INSPECT_ACTIVATE        = "INSPECT_ACTIVATE",  INSPECT_DEACTIVATE      = "INSPECT_DEACTIVATE",  ELEMENT_SELECTED        = "ELEMENT_SELECTED",  // Screenshots [V2]  CAPTURE_SCREENSHOT      = "CAPTURE_SCREENSHOT",  STITCH_TILES            = "STITCH_TILES",  STORE_SCREENSHOT        = "STORE_SCREENSHOT",  // Animation [V3]  DETECT_ANIMATIONS       = "DETECT_ANIMATIONS",  ANIMATION_RESULT        = "ANIMATION_RESULT",  // Export & storage  EXPORT_FILE             = "EXPORT_FILE",  EXPORT_COMPLETE         = "EXPORT_COMPLETE",  EXPORT_ERROR            = "EXPORT_ERROR",  HISTORY_LOAD            = "HISTORY_LOAD",  HISTORY_RESULT          = "HISTORY_RESULT",  HISTORY_DELETE          = "HISTORY_DELETE",  HISTORY_CLEAR           = "HISTORY_CLEAR",}
+10.2  Message Envelope
+interface Message<T extends MessageType, P = void> {  type:      T;  payload:   P;  requestId: string;   // UUID — for matching async responses  fromCtx:   Context;  // Which context sent this}type Context = "panel" | "content-script" | "service-worker" | "main-world";
+10.3  Full Payload Types
+type ExtractPagePayload = {  url:      string;  tabId:    number;  options: { domLimit: number; detectAnimations: boolean; };};type ProgressPayload = {  step:    string;    // "Reading CSS variables"  pct:     number;    // 0–100  phase:   1 | 2 | 3 | 4;};type ElementSelectedPayload = {  tagName:     string;  html:        string;   // ≤2000 chars  css:         string;   // Non-default computed CSS block  boundingBox: BoundingBox;  selector:    string;};type CaptureScreenshotPayload = void;   // SW calls captureVisibleTab on receivetype ScreenshotResponsePayload = { dataUrl: string; };type StitchTilesPayload = {  extractionId: string;  tiles:        string[];   // Array of base64 PNG dataUrls  pageHeight:   number;  viewportHeight: number;};type ExportFilePayload = {  format:      ExportFormat;  extractionId:string;  tool?:       AITool;   // Required for "master-prompt" format};type AnimationResultPayload = AnimationReport;
+11. Export Format Schemas & Generation Logic
+This section patches TRD Gap #1: the transformation logic that converts ExtractionResult into each export format was not defined in the TRD. It is fully specced here.
+11.1  tokens.json  (W3C DTCG 2025.10)
+Generator: generateTokensJSON(result: ExtractionResult): string
+The transformation maps each token type to the W3C Design Token Community Group format:
+{  "$metadata": {    "source":      "{result.url}",    "extractedBy": "StyleSnap v{result.version}",    "extractedAt": "{ISO timestamp}",    "dtcgVersion": "2025.10",    "confidence":  {result.confidence}  },  "color": {    "{token.suggestedName | kebab-case}": {      "$value": "{token.hex}",      "$type": "color",      "$description": "Frequency: {token.frequency}. Contexts: {token.contexts.join(', ')}.",      "$extensions": {        "stylesnap": {          "hsl": "{token.hsl}", "group": "{token.semanticGroup}",          "cssVar": "{token.cssVarName ?? null}"        }      }    }  },  "font-family": {    "{family.name | kebab-case}": { "$value": "{family.stack}", "$type": "fontFamily" }  },  "font-size": {    "{entry.role}": { "$value": "{entry.fontSize}", "$type": "dimension" }  },  "spacing": {    "{value.token}": { "$value": "{value.px}px", "$type": "dimension" }  },  "border-radius": {    "{radius.level}": { "$value": "{radius.value}", "$type": "dimension" }  },  "box-shadow": {    "{shadow.level}": { "$value": "{shadow.value}", "$type": "shadow" }  }}
+11.2  DESIGN.md
+Generator: generateDesignMD(result: ExtractionResult): string
+Markdown document structured for maximum AI tool utility. Section order is fixed:
+# DESIGN SYSTEM — {result.title}> Source: {result.url} | Extracted by StyleSnap v{version} | {date}> Framework: {result.detectedFramework} | Confidence: {result.confidence * 100}%## Warnings<!-- Only included if result.warnings.length > 0 -->{warnings as bullet list}## CSS Variables (paste into :root)```css:root {  {for each cssVariable: "--name: value;"}}```## Colour Palette| Token | Hex | HSL | Frequency | Group ||-------|-----|-----|-----------|-------|| {suggestedName} | {hex} | {hsl} | {frequency} | {semanticGroup} |## Typography**Primary font:** {families[0].name} — {families[0].stack}| Role | Size | Weight | Line Height || {role} | {fontSize} | {fontWeight} | {lineHeight} |## Spacing ScaleBase unit: {spacing.baseUnit}px | Grid: {spacing.isGrid}Scale: {spacing.values.map(v => v.px + "px").join(" · ")}## Shadows| Level | Value |## Border Radius| Level | Value |## Breakpoints| Label | px | em |## Components  <!-- [V2] only -->{for each component: ### {label}
+```html
+{html}
+```
+```css
+{css}
+```}## Animations  <!-- [V3] only -->{animationReport.summary}{for each library: ### {library.library}
+{library.description}}
+11.3  tailwind.config.js
+Generator: generateTailwindConfig(result: ExtractionResult): string
+/** @type {import("tailwindcss").Config} *//** Generated by StyleSnap v{version} from {url} */module.exports = {  content: ["./src/**/*.{html,js,jsx,ts,tsx}"],  theme: {    extend: {      colors: {        // {for each token: "{suggestedName | camelCase}": "{hex}"}        // Grouped by semanticGroup      },      fontFamily: {        // {for each family: "{name | camelCase}": ["{name}", ...fallbacks]}      },      fontSize: {        // {for each scaleEntry: "{role}": ["{fontSize}", { lineHeight: "{lh}" }]}      },      spacing: {        // Only non-standard values (not in Tailwind default)        // {for each spacing.value where !isDefaultTailwindSpacing(v): "{v.token}": "{v.px}px"}      },      borderRadius: {        // {for each radius: "{level}": "{value}"}      },      boxShadow: {        // {for each shadow: "{level}": "{value}"}      },      screens: {        // {for each breakpoint: "{label}": "{px}px"}      },    },  },  plugins: [],};
+11.4  components.md  [V2]
+Generator: generateComponentsMD(result: ExtractionResult): string
+# Component Library — {result.title}> Extracted by StyleSnap v{version} | {result.componentCount} components detected<!-- For each component where !isUncertain: -->## {component.label | Title Case}**Confidence:** {(component.confidence * 100).toFixed(0)}%  **Instances:** {component.instanceCount}  **Signals:** {component.signals.map(s => s.type).join(", ")}  ### HTML```html{component.html}```### CSS```css{component.css}```---<!-- Uncertain section — collapsed by default in UI but included in export -->## Uncertain Detections ({uncertainCount})> These components scored 0.45–0.59. Review before use.{same format for each uncertain component}
+11.5  Master Prompt Templates  [V2]
+Generator: generateMasterPrompt(result: ExtractionResult, tool: AITool): string
+Each tool gets a different template. Key structural differences:
+Tool
+Token budget
+Structural approach
+Cursor
+≤4,000 tokens
+Leads with DESIGN.md block. Tailwind config as code fence. "Apply this system to all new components."
+Claude Code
+≤6,000 tokens
+SKILL.md format. Sections with ## headers. CSS variables first. Explicit instruction block at end.
+v0
+≤2,000 tokens
+Component-first. List components before tokens. Mention shadcn/ui equivalents. Short, dense.
+Bolt
+≤3,000 tokens
+Full-stack context. Includes section layout. "Build a site with this structure:" opener.
+Lovable
+≤1,500 tokens
+Conversational opener. Visual goal first. Token block appended inline, not as code fence.
+12. ZIP Packaging Pipeline
+This section patches TRD Gap #3: ZIP folder structure, naming, and file manifest were not defined in the TRD. Fully specced here.
+12.1  ZIP Structure — Full Export
+Generator: generateFullZIP(result: ExtractionResult, screenshots?: ScreenshotRecord): JSZip
+stylesnap-{origin-slug}-{YYYY-MM-DD}.zip│├── DESIGN.md                    // AI-ready design system doc├── tokens.json                  // W3C DTCG 2025.10├── tailwind.config.js           // Drop-in Tailwind config├── components.md                // [V2] Component library├── master-prompt-cursor.txt     // [V2] Per-tool prompts├── master-prompt-claude-code.txt├── master-prompt-v0.txt│├── assets/│   ├── images/│   │   ├── img-001-{alt-slug}.png    // {asset.id}-{slugify(alt)}.{ext}│   │   ├── img-002-{alt-slug}.webp│   │   └── ...│   ├── svgs/│   │   ├── svg-001.svg│   │   ├── svg-002-logo.svg          // Named if alt/aria-label available│   │   └── ...│   ├── icons/│   │   └── ...                       // SVGs with width+height ≤ 48px│   └── favicon.png│└── screenshots/                  // [V2] Only if screenshots captured    ├── full-page.png    ├── section-00-navigation.png    ├── section-01-hero.png    ├── section-02-features.png    └── ...
+12.2  Assets-only ZIP
+Triggered by "Download All Assets" button. Same folder structure as above but only the assets/ folder. No token files.
+stylesnap-assets-{origin-slug}-{YYYY-MM-DD}.zip├── images/ ...├── svgs/ ...├── icons/ ...└── favicon.png
+12.3  Filename Conventions
+Pattern
+Logic
+{origin-slug}
+new URL(result.url).hostname.replace(/\W/g,"-") — e.g. "stripe-com"
+{alt-slug}
+slugify(asset.alt).slice(0, 30) || "untitled"
+img-{NNN}
+Zero-padded 3-digit sequential index within type group
+svg-{NNN}
+Same pattern — icons sorted first (width ≤ 48px)
+section-{NN}-{label}
+Zero-padded order + PageSection.label
+12.4  ZIP Generation Flow
+async function generateFullZIP(  result: ExtractionResult,  screenshots?: ScreenshotRecord): Promise<Blob> {  const zip = new JSZip();  // 1. Text files — generated synchronously  zip.file("DESIGN.md",         generateDesignMD(result));  zip.file("tokens.json",       generateTokensJSON(result));  zip.file("tailwind.config.js",generateTailwindConfig(result));  if (result.components) {    zip.file("components.md",   generateComponentsMD(result));    for (const tool of AI_TOOLS) {      zip.file(`master-prompt-${tool}.txt`, generateMasterPrompt(result, tool));    }  }  // 2. Assets — fetch and add  const assets = zip.folder("assets")!;  const images = assets.folder("images")!;  const svgs   = assets.folder("svgs")!;  const icons  = assets.folder("icons")!;  for (const [i, img] of result.assets.images.entries()) {    const ext  = mimeToExt(img.mimeType);    const slug = slugify(img.alt).slice(0, 30) || "untitled";    const data = await fetchAsBlob(img.src);  // fetch() in SW context    images.file(`img-${pad(i+1, 3)}-${slug}.${ext}`, data);  }  for (const [i, svg] of result.assets.svgs.entries()) {    const folder = svg.isIcon ? icons : svgs;    folder.file(`svg-${pad(i+1, 3)}.svg`, svg.svgContent);  }  if (result.assets.favicon?.dataUri) {    const b64 = result.assets.favicon.dataUri.split(",")[1];    assets.file("favicon.png", b64, { base64: true });  }  // 3. Screenshots — add blobs directly  if (screenshots) {    const shots = zip.folder("screenshots")!;    shots.file("full-page.png", screenshots.fullPage);    for (const [i, s] of screenshots.sections.entries()) {      shots.file(`section-${pad(i, 2)}-${s.label}.png`, s.blob);    }  }  return zip.generateAsync({ type: "blob", compression: "DEFLATE" });}
+13. Schema Versioning & Migration
+13.1  Version Strategy
+Schema version is tracked independently in two places:
+chrome.storage.local → Settings.schemaVersion (integer, increments on breaking changes)
+IndexedDB → database version parameter in openDB() call (integer, triggers upgrade callback)
+These two version integers are independent — a settings schema change does not require an IndexedDB version bump and vice versa.
+13.2  Settings Migration Function
+const CURRENT_SETTINGS_SCHEMA = 1;async function migrateSettings(raw: unknown): Promise<Settings> {  const s = raw as Partial<Settings> & { schemaVersion?: number };  const v = s.schemaVersion ?? 0;  if (v < 1) {    // V0 → V1: add defaultAITool field (V2 feature, backfill default)    (s as any).defaultAITool = "cursor";    s.schemaVersion = 1;  }  // if (v < 2) { ... add future migrations here }  return s as Settings;}
+13.3  Migration Changelog
+Ver
+Storage
+StyleSnap
+Change
+ 1
+Settings v1
+v1.0.0
+Initial schema. All V1 fields. No migration needed (fresh install).
+ 2
+Settings v2
+v2.0.0 [V2]
+Add defaultAITool. Add enableAnimationDetection. IndexedDB v1→v2: add screenshots store.
+ 3
+Settings v3
+v3.0.0 [V3]
+Add animation detection settings. No IndexedDB change needed.
+14. Storage Size Budget
+Understanding storage usage is critical — chrome.storage.local has a 5MB default limit, and IndexedDB uses disk space that Chrome may reclaim under pressure.
+14.1  Per-Extraction Size Estimates
+Data
+Typical
+Worst case
+Notes
+DesignTokens (colors+typography+spacing)
+~40KB
+~120KB
+Larger for token-heavy design systems
+AssetManifest (metadata only, no blobs)
+~15KB
+~80KB
+Many images = larger manifest
+Component[] (V2)
+~60KB
+~300KB
+HTML snippets add significant size
+LayoutStructure (V2)
+~5KB
+~20KB
+Relatively small
+AnimationReport (V3)
+~8KB
+~40KB
+GSAP trigger lists can be long
+ExtractionResult wrapper + metadata
+~2KB
+~5KB
+Fixed overhead
+Total ExtractionRecord (V1)
+~57KB
+~200KB
+No screenshots
+Total ExtractionRecord (V2+V3)
+~130KB
+~565KB
+No screenshots
+Full-page screenshot (PNG)
+~800KB
+~3MB
+Compressed; typical 1440px-wide page
+Section screenshots (×5 average)
+~400KB
+~1.5MB
+Per extraction
+Total with screenshots (V2)
+~1.3MB
+~5MB
+Per single extraction with screenshots
+14.2  10-Extraction Budget
+Scenario
+Total (typical)
+Total (worst case)
+V1 — 10 extractions, no screenshots
+570KB
+2MB
+V2 — 10 extractions, no screenshots
+1.3MB
+5.65MB
+V2 — 10 extractions, with screenshots
+14.3MB
+55MB
+V1 fits comfortably in the 5MB chrome.storage.local default (metadata only stored there; full payloads go to IndexedDB). Screenshots at V2 push total storage into the 10–55MB range — the unlimitedStorage permission must be requested at V2 first launch if screenshot capture is enabled.
+14.3  unlimitedStorage Request Trigger
+// In service worker — called at V2 first launch:async function ensureStoragePermission(): Promise<void> {  const hasPermission = await chrome.permissions.contains({    permissions: ["unlimitedStorage"],  });  if (!hasPermission) {    // Show panel notification first (user must be aware before permission dialog)    await chrome.runtime.sendMessage({      type: MessageType.EXPORT_ERROR,      payload: { reason: "needs-unlimited-storage" },    });    // Permission dialog is user-gesture-gated —    // the panel must call chrome.permissions.request() from a button handler.    // SW cannot call this directly from background context.  }}
+15. Document History
+Version
+Date
+Author
+Changes
+v1.0
+July 2026
+Guru (Soham Belwadkar)
+Initial schema doc — all types, storage schemas, CRUD ops, cascade delete, export generators, ZIP pipeline, size budget. Patches 3 TRD gaps.

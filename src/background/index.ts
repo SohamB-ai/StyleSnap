@@ -53,7 +53,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case MessageType.EXTRACT_PAGE: {
       const tabId = message.payload?.tabId || sender.tab?.id;
       if (tabId) {
-        handleExtractPage(tabId, message.payload.options);
+        handleExtractPage(tabId, message.payload?.options);
       }
       break;
     }

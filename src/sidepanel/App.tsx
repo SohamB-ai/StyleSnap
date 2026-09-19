@@ -1,4 +1,4 @@
-// Main Side Panel App Container Component
+// Main Side Panel / Popup App Container Component — TypeUI & Stitch design layout
 
 import React, { useEffect } from "react";
 import { useStore } from "./store";
@@ -7,6 +7,7 @@ import { TabBar } from "./components/TabBar";
 import { ActionBar } from "./components/ActionBar";
 import { EmptyState } from "./components/EmptyState";
 import { ExtractingState } from "./components/ExtractingState";
+import { MarkdownViewer } from "./components/MarkdownViewer";
 import { TokensTab } from "./components/TokensTab";
 import { AssetsTab } from "./components/AssetsTab";
 import { HistoryTab } from "./components/HistoryTab";
@@ -35,12 +36,15 @@ export const App: React.FC = () => {
       }
     });
 
-    // 2. Global Chrome Message Listener inside Side Panel
+    // 2. Global Chrome Message Listener inside Popup / Side Panel
     const messageListener = (message: any) => {
       if (message.type === MessageType.EXTRACTION_PROGRESS) {
         updateProgress(message.payload.step, message.payload.pct);
       } else if (message.type === MessageType.EXTRACTION_COMPLETE) {
         finishExtraction(message.payload);
+      } else if (message.type === MessageType.EXTRACTION_ERROR) {
+        useStore.setState({ isExtracting: false });
+        useStore.getState().showToast(message.payload?.reason || "Extraction failed. Please refresh the page.", "error");
       } else if (message.type === MessageType.ELEMENT_SELECTED) {
         setInspectedElement(message.payload);
       }
@@ -53,23 +57,24 @@ export const App: React.FC = () => {
   }, []);
 
   return (
-    <div className="w-full h-screen bg-base text-primary flex flex-col overflow-hidden relative font-sans">
+    <div className="w-full h-full bg-base text-primary flex flex-col overflow-hidden relative font-sans select-none">
       {/* Top Header */}
       <Header />
 
-      {/* Tab Navigation */}
+      {/* Tab Segmented Control */}
       <TabBar />
 
       {/* Main Content Scrollable Zone */}
-      <main className="flex-1 overflow-y-auto relative flex flex-col">
+      <main className="flex-1 overflow-y-auto relative flex flex-col pt-1">
         {inspectedElement ? (
           <ElementSelected />
         ) : isExtracting ? (
           <ExtractingState />
         ) : result ? (
           <>
-            {activeTab === "tokens" && <TokensTab />}
-            {activeTab === "assets" && <AssetsTab />}
+            {activeTab === "tokens" && <MarkdownViewer />}
+            {activeTab === "assets" && <MarkdownViewer />}
+            {activeTab === "export" && <TokensTab />}
             {activeTab === "history" && <HistoryTab />}
           </>
         ) : activeTab === "history" ? (
@@ -79,8 +84,8 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Bottom Action Bar */}
-      <ActionBar />
+      {/* Bottom Action Bar — rendered only when results exist */}
+      {result && <ActionBar />}
 
       {/* Overlays */}
       <SettingsPanel />
@@ -88,3 +93,4 @@ export const App: React.FC = () => {
     </div>
   );
 };
+

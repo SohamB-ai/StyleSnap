@@ -31,49 +31,63 @@ function sendProgress(step: string, pct: number, phase: 1 | 2 | 3) {
         payload: { step, pct, phase }
       });
     }
-  } catch {
-    // Port fallback
-  }
+  } catch {}
+  
+  // Direct fallback
+  chrome.runtime.sendMessage({
+    type: MessageType.EXTRACTION_PROGRESS,
+    payload: { step, pct, phase }
+  }).catch(() => {});
 }
 
 function runFullExtraction(domLimit: number = 2000) {
   const startTime = Date.now();
 
-  sendProgress("Reading CSS custom properties & breakpoints...", 15, 1);
+  setTimeout(() => {
+    try {
+      sendProgress("Reading CSS custom properties & breakpoints...", 15, 1);
 
-  // Phase 1, 2, 3: Extract Tokens & Framework
-  const { tokens, warnings, framework } = extractTokens(domLimit);
-  sendProgress("Analyzing rendered colors, typography & spacing...", 60, 2);
+      // Phase 1, 2, 3: Extract Tokens & Framework
+      const { tokens, warnings, framework } = extractTokens(domLimit);
+      sendProgress("Analyzing rendered colors, typography & spacing...", 60, 2);
 
-  // Scan Assets
-  const assets = scanAssets();
-  sendProgress("Scanning page images, icons & favicons...", 85, 3);
+      // Scan Assets
+      const assets = scanAssets();
+      sendProgress("Scanning page images, icons & favicons...", 85, 3);
 
-  const duration = Date.now() - startTime;
-  const extractionId = `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const duration = Date.now() - startTime;
+      const extractionId = `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-  const result: ExtractionResult = {
-    id: extractionId,
-    url: window.location.href,
-    origin: window.location.origin,
-    title: document.title || "Untitled Page",
-    favicon: assets.favicon?.dataUri || "",
-    timestamp: startTime,
-    duration,
-    version: "1.0.0",
-    tokens,
-    assets,
-    warnings,
-    confidence: 0.96,
-    detectedFramework: framework
-  };
+      const result: ExtractionResult = {
+        id: extractionId,
+        url: window.location.href,
+        origin: window.location.origin,
+        title: document.title || "Untitled Page",
+        favicon: assets.favicon?.dataUri || "",
+        timestamp: startTime,
+        duration,
+        version: "1.0.0",
+        tokens,
+        assets,
+        warnings,
+        confidence: 0.96,
+        detectedFramework: framework
+      };
 
-  sendProgress("Extraction complete!", 100, 3);
+      sendProgress("Extraction complete!", 100, 3);
 
-  chrome.runtime.sendMessage({
-    type: MessageType.EXTRACTION_COMPLETE,
-    payload: result
-  });
+      chrome.runtime.sendMessage({
+        type: MessageType.EXTRACTION_COMPLETE,
+        payload: result
+      });
+    } catch (err: any) {
+      console.error("StyleSnap Extraction Error:", err);
+      chrome.runtime.sendMessage({
+        type: MessageType.EXTRACTION_ERROR,
+        payload: { reason: err.message || "Failed to parse page styles." }
+      }).catch(() => {});
+    }
+  }, 10);
 }
 
 // Global Message Listener inside Content Script

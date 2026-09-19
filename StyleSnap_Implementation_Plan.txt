@@ -1,0 +1,1067 @@
+StyleSnap
+Chrome Extension
+Implementation Plan  ·  v1.0
+Author  Guru (Soham Belwadkar)
+Status  Draft v1.0
+Date  July 2026
+Timeline  12 weeks  —  V1 (Wk 1–3)  ·  V2 (Wk 4–10)  ·  V3 (Wk 11–12)
+Companion to  PRD + TRD + Extension Flow + UI/UX + Backend Schema
+Product  Omenova Studio
+1. How to Use This Plan
+This document is the single source of truth for building StyleSnap across all three versions. Every task includes a doc reference (which document to consult), the exact file or module to create, and an estimated hour count. Tasks are ordered by dependency — do them top-to-bottom within each week.
+Column
+Meaning
+#
+Task number — unique identifier across the full plan. Reference as T-001, T-045 etc.
+Task
+What to build. Specific enough to open your editor and start coding.
+Doc ref
+Which companion document and section to read before starting.
+File / module
+Exact file path or module name to create or modify.
+Hours
+Realistic estimate for a developer who knows React + TypeScript but is new to Chrome extensions.
+Version colour coding used throughout this document:
+V1
+V2
+V3
+Each version is independently shippable to the Chrome Web Store.
+2. Prerequisites & Phase 0 — Environment Setup
+Complete Phase 0 before Week 1. These are one-time setup tasks. Estimated total: 3–4 hours.
+2.1  Accounts & Access
+Account
+Purpose
+Action
+Google Developer Account
+Chrome Web Store publishing
+Pay $5 one-time fee at chrome.google.com/webstore/devconsole
+GitHub account
+Version control, portfolio visibility
+Create repo: stylesnap-extension (public for portfolio)
+Chrome browser (latest stable)
+Testing environment
+Update to latest. Enable Developer Mode in chrome://extensions
+Chrome Canary (optional)
+Test upcoming API changes
+Download from google.com/chrome/canary
+2.2  Local Environment
+Tool
+Version
+Install command
+Node.js
+20 LTS
+nvm install 20 && nvm use 20
+pnpm
+9.x
+npm install -g pnpm
+VS Code
+Latest
+code.visualstudio.com
+VS Code extensions
+—
+ESLint, Prettier, Tailwind CSS IntelliSense, TypeScript Hero
+Git
+2.x
+brew install git (macOS) / apt install git (Linux)
+2.3  Phase 0 Task List
+#
+Task
+Doc ref
+File / module
+Hours
+P-01
+Create GitHub repo: stylesnap-extension (public). Add MIT licence, .gitignore (Node).
+—
+github.com/SohamB-ai/stylesnap
+0.5h
+P-02
+Scaffold project: pnpm create vite@latest stylesnap-extension --template react-ts
+TRD §19
+vite.config.ts
+0.5h
+P-03
+Install core dependencies: pnpm add @crxjs/vite-plugin@2.6.x zustand idb jszip
+TRD §2
+package.json
+0.5h
+P-04
+Install dev dependencies: @types/chrome eslint prettier tailwindcss autoprefixer postcss
+TRD §2
+package.json
+0.5h
+P-05
+Configure vite.config.ts with CRXJS plugin. Reference TRD §19.1 exactly.
+TRD §19.1
+vite.config.ts
+0.5h
+P-06
+Write manifest.config.ts with all V1 permissions (TRD §4.1). Use schemaVersion 1.
+TRD §4
+manifest.config.ts
+0.5h
+P-07
+Set up Tailwind CSS: npx tailwindcss init -p. Configure content paths for sidepanel.
+UI/UX §7
+tailwind.config.js
+0.5h
+P-08
+Create the full folder structure as defined in TRD §3.3. Add index.ts placeholder in each.
+TRD §3.3
+src/**
+0.5h
+P-09
+Copy all TypeScript interfaces from Backend Schema into src/shared/types.ts.
+Schema §2–7
+shared/types.ts
+1h
+P-10
+Copy MessageType enum and all payload types into src/shared/messages.ts.
+Schema §10
+shared/messages.ts
+0.5h
+P-11
+Run pnpm dev. Load dist/ as unpacked extension. Verify panel opens on toolbar click.
+—
+—
+0.5h
+After P-11: if the side panel does not open, check that chrome.sidePanel.setOptions() is called in background/index.ts onInstalled handler. This is the most common first-launch issue.
+3. Version 1 — Core Parity  (Weeks 1–3)
+Goal: A solid, accurate, free extension that matches everything both reference extensions offer. Ship to Chrome Web Store by end of Week 3. V1 is the foundation all future versions build on — accuracy here matters more than speed.
+V1 Deliverable
+Definition of Done
+Token extraction
+Colors/typography/spacing/shadows/radii/breakpoints extracted with ≥95% accuracy on 10 test sites
+Element inspector
+Hover → highlight → click → CSS + HTML in panel. Works on 10 test sites.
+Asset finder
+All images/SVGs/icons listed. ZIP download works. Favicon always included.
+Export formats
+DESIGN.md, tokens.json (W3C DTCG), tailwind.config.js — all download correctly.
+History
+Last 10 extractions saved. Load + delete work. Auto-eviction fires on entry 11.
+CWS listing
+Extension live on Chrome Web Store with description, screenshots, privacy policy.
+ Week 1  —  Architecture + Service Worker + Side Panel Shell   [V1]
+Week 1 Goal: A working extension skeleton — side panel opens, Extract button exists, messaging between panel and SW works. Nothing is extracted yet.
+#
+Task
+Doc ref
+File / module
+Hours
+1-01
+Write background/index.ts service worker entry. Register onInstalled handler — write default settings to chrome.storage.local.
+Schema §8.1 Flow §3
+background/index.ts
+1h
+1-02
+Implement chrome.sidePanel.setOptions() + chrome.action.onClicked → open side panel.
+Flow §4 TRD §4
+background/index.ts
+0.5h
+1-03
+Write background/services/db.ts: openStyleSnapDB() with both object stores + all indexes. Match Schema §8.3 exactly.
+Schema §8.3
+background/services/db.ts
+1.5h
+1-04
+Write background/handlers/extraction.ts stub: receives EXTRACT_PAGE, will call CS (CS not written yet — just log).
+Schema §10
+background/handlers/extraction.ts
+0.5h
+1-05
+Write background/handlers/export.ts stub: receives EXPORT_FILE, logs payload.
+Schema §10
+background/handlers/export.ts
+0.5h
+1-06
+Scaffold sidepanel/main.tsx: React 18 createRoot. Mount App.
+TRD §3.3
+sidepanel/main.tsx
+0.5h
+1-07
+Create sidepanel/store.ts with Zustand. State: ExtractionResult|null, UIState, theme, settings.
+Schema §8.1 UI/UX §7
+sidepanel/store.ts
+1.5h
+1-08
+Build Header component: logo, URL display, settings icon. Match UI/UX §3.2.
+UI/UX §3.2
+components/Header.tsx
+1h
+1-09
+Build TabBar component: Tokens / Assets / History tabs. Active tab state in Zustand.
+UI/UX §3.3
+components/TabBar.tsx
+1h
+1-10
+Build ActionBar component: Extract button (disabled/loading/idle states) + Export dropdown stub.
+UI/UX §3.4
+components/ActionBar.tsx
+1.5h
+1-11
+Build EmptyState screen. Match UI/UX §4.1 wireframe.
+UI/UX §4.1
+components/EmptyState.tsx
+0.5h
+1-12
+Write full CSS custom property theme (dark + light) in sidepanel/index.css. Match UI/UX §7.
+UI/UX §7.1
+sidepanel/index.css
+1h
+1-13
+Wire EXTRACT_PAGE message: Extract button → chrome.runtime.sendMessage → SW → console.log. Full round-trip verified.
+Flow §5 Schema §10
+ActionBar.tsx + SW
+1h
+1-14
+Manual test: load extension, open panel on stripe.com, click Extract, confirm message appears in SW console.
+—
+—
+0.5h
+Week 1 checkpoint: Panel opens, tabs render, Extract button sends a message to SW and you can see it in chrome://extensions → service worker console. Nothing is extracted yet — that is Week 2.
+ Week 2  —  Token Extraction Engine (Core)   [V1]
+Week 2 Goal: Full 3-phase extraction running. ExtractionResult in the panel. Tokens tab rendering real data.
+#
+Task
+Doc ref
+File / module
+Hours
+2-01
+Write content/isolated/index.ts: listens for EXTRACT_PAGE from SW, orchestrates all extraction phases, sends EXTRACTION_PROGRESS over port.
+TRD §7 Flow §5
+content/isolated/index.ts
+1h
+2-02
+Implement port connection: content script calls chrome.runtime.connect("stylesnap-extraction"). SW listens on onConnect — keeps SW alive during extraction.
+TRD §6.2 Flow §5 step 4
+background/index.ts
+1h
+2-03
+Write extractor/tokens.ts Phase 1: scanStylesheets(). Iterate document.styleSheets, extract CSS custom properties from :root and *, extract @media breakpoints. Match TRD §7.1 code exactly.
+TRD §7.1
+content/isolated/extractor/tokens.ts
+2h
+2-04
+Write Phase 2: walkDOM(). Iterate up to 2000 visible elements. getComputedStyle() for colors (5 properties), fonts (family/size/weight/lineHeight), spacings (8 properties), radii, shadows. Match TRD §7.2.
+TRD §7.2
+content/isolated/extractor/tokens.ts
+3h
+2-05
+DECISION POINT: Set color clustering tolerance to ±5°/10%/10% as recommended in TRD §21. Document this decision in code comment for easy adjustment.
+TRD §21
+extractor/tokens.ts
+—
+2-06
+Write Phase 3: deduplicate and normalize. Color clustering (HSL proximity), type scale sorting and role labeling (h1–h6/body/caption), spacing grid detection (4px base), shadow elevation classification, radius level naming.
+TRD §7.3
+extractor/tokens.ts
+3h
+2-07
+Write framework detection: check for Tailwind utility classes (bg-*, text-*, p-*), styled-components (<style data-styled>), Emotion (<style data-emotion>), CSS variables (:root --var). Set FrameworkType.
+TRD §7.4 Schema §2
+extractor/tokens.ts
+1.5h
+2-08
+Write extractor/assets.ts: scan img, svg, picture, CSS background-image, favicon. Build AssetManifest. Match Schema §7 types exactly.
+TRD §9 Schema §7
+content/isolated/extractor/assets.ts
+2h
+2-09
+Assemble ExtractionResult in content script. Send EXTRACTION_COMPLETE to SW via port.
+Schema §2
+content/isolated/index.ts
+1h
+2-10
+SW handler: receive EXTRACTION_COMPLETE. Call saveExtraction() from db.ts — write to IndexedDB + update history. Match Schema §9.1 exactly (including eviction logic).
+Schema §9.1
+background/handlers/extraction.ts
+2h
+2-11
+SW forwards ExtractionResult to side panel via chrome.runtime.sendMessage. Panel receives and updates Zustand store.
+Flow §5 step 16–18
+background/handlers/extraction.ts
+0.5h
+2-12
+Build TokensTab.tsx: colour swatches grid, typography specimen, spacing visualiser, shadow/radius/breakpoint rows. All values from Zustand store. Match UI/UX §4.3 wireframe.
+UI/UX §4.3 UI/UX §5.2
+sidepanel/components/TokensTab.tsx
+3h
+2-13
+Implement copy-to-clipboard on every token value. 3-state copy button (default → copied → reset). Match UI/UX §6.1 exactly.
+UI/UX §6.1
+components/CopyButton.tsx
+1h
+2-14
+Build ExtractingState.tsx: progress bar (4px, animated fill), step label, skeleton rows. Match UI/UX §4.2.
+UI/UX §4.2
+components/ExtractingState.tsx
+1h
+2-15
+Accuracy test: run extraction on stripe.com, linear.app, vercel.com. Manually compare tokens to DevTools. Fix any >5% error. Document results.
+TRD §20.2
+—
+2h
+Week 2 checkpoint: Extract Full Page on stripe.com returns the correct primary indigo (#635BFF) as the top color, Inter as the primary font, and the correct spacing scale. Screenshots the panel and save for the portfolio case study.
+ Week 3  —  Inspector + Assets + Exports + History + CWS V1   [V1]
+Week 3 Goal: All V1 features complete. Extension published on Chrome Web Store.
+#
+Task
+Doc ref
+File / module
+Hours
+3-01
+Write content/isolated/inspector.ts: inject overlay div, attach mouseover + click listeners (capture phase). getComputedStyle on click, extractRelevantCSS (diff from baseline). Send ELEMENT_SELECTED.
+TRD §8 Flow §6
+content/isolated/inspector.ts
+2.5h
+3-02
+Handle INSPECT_ACTIVATE / INSPECT_DEACTIVATE messages in content script. Wire Inspect button in panel.
+Flow §6
+content/isolated/index.ts
+0.5h
+3-03
+Build ElementSelectedView in panel: tag badge, formatted CSS block (syntax highlight key props), HTML snippet, Copy All CSS + Copy HTML buttons, Inspect Again + Done.
+UI/UX §4.9
+components/ElementSelected.tsx
+2h
+3-04
+Build AssetsTab.tsx: 4-column grid, type filter bar, individual Copy URL + Copy Data URI per card, favicon row at top. Match UI/UX §4.5.
+UI/UX §4.5 UI/UX §5.6
+components/AssetsTab.tsx
+2h
+3-05
+Implement asset ZIP download: JSZip, fetch each asset URL in SW context, folder structure as Schema §12.2. chrome.downloads.download().
+Schema §12.2
+background/handlers/export.ts
+2h
+3-06
+Implement DESIGN.md generator. Match Schema §11.2 template exactly. All sections included.
+Schema §11.2
+background/services/exporter.ts
+1.5h
+3-07
+Implement tokens.json generator. W3C DTCG 2025.10 format. Match Schema §11.1 template.
+Schema §11.1
+background/services/exporter.ts
+1h
+3-08
+Implement tailwind.config.js generator. Skip default Tailwind values (use a lookup table). Match Schema §11.3.
+Schema §11.3
+background/services/exporter.ts
+1.5h
+3-09
+Build Export dropdown in ActionBar: DESIGN.md / tokens.json / tailwind.config.js + Copy DESIGN.md to Clipboard. Wire to EXPORT_FILE message.
+UI/UX §5.9 Flow §8
+components/ActionBar.tsx
+1.5h
+3-10
+Build HistoryTab.tsx: entry list (favicon, title, URL, timestamp, counts, delete icon). Click → HISTORY_LOAD → load ExtractionResult from IndexedDB → populate store.
+UI/UX §4.7 Flow §9
+components/HistoryTab.tsx
+2h
+3-11
+Implement HISTORY_DELETE in SW. Cascade delete: ExtractionRecord + ScreenshotRecord (if any). Match Schema §9.2 exactly.
+Schema §9.2 Flow §9.2
+background/services/db.ts
+1h
+3-12
+Build SettingsPanel.tsx: theme radio (dark/light/system), default format selector, DOM sample limit input, Clear all history button. Slide-in from right.
+UI/UX §4.8
+components/SettingsPanel.tsx
+2h
+3-13
+Implement theme switching: set data-theme on :root, persist to chrome.storage.local. System preference detection (prefers-color-scheme media query). Match UI/UX §7.2.
+UI/UX §7.2
+sidepanel/store.ts
+1h
+3-14
+Build all error states: extraction failed, restricted page, extraction interrupted with retry. Match UI/UX §4.10.
+UI/UX §4.10
+components/ErrorState.tsx
+1h
+3-15
+Build Toast notification component: slide-up 200ms, auto-dismiss 3s, success/error variants. Match UI/UX §5.7 + §8.
+UI/UX §5.7
+components/Toast.tsx
+1h
+3-16
+Add all ARIA labels (role, aria-label, aria-describedby) to interactive elements. Match UI/UX §9.2.
+UI/UX §9.2
+All components
+1h
+3-17
+Full end-to-end test: 10 reference sites (Schema §14 list). Fix accuracy issues. Target ≥95%.
+TRD §20
+—
+2h
+3-18
+Write privacy policy (1 page). Host on GitHub Pages or Vercel. URL needed for CWS listing.
+—
+privacy-policy.html
+0.5h
+3-19
+Create CWS store assets: 3 screenshots (1280×800), 1 promotional tile (440×280). Record a 30-second demo GIF.
+—
+assets/cws/
+2h
+3-20
+Publish V1 to Chrome Web Store. Fill description, category (Developer Tools), privacy policy URL. Submit for review.
+—
+chrome.google.com/webstore/devconsole
+1h
+CWS review typically takes 1–3 business days for a new extension. While waiting for approval, begin V2 scaffolding. If rejected, the most common reasons are: overly broad host_permissions without justification, or missing privacy policy. Both are easy fixes.
+4. Version 2 — Upgraded Accuracy & Depth  (Weeks 4–10)
+Goal: Introduce features that neither competitor has — layout extraction, component detection, AI prompt engine, and screenshot pipeline. V2 is the version that makes StyleSnap a genuinely differentiated product.
+V2 Deliverable
+Definition of Done
+Screenshot pipeline
+Full-page PNG + section screenshots captured and downloadable for any typical webpage.
+Layout extraction
+Section breakdown with grid/flex info for any of the 10 reference sites.
+Component detection
+≥10 components detected with ≥90% label accuracy on component-heavy sites (e.g., stripe.com).
+AI prompt engine
+5 tool-specific master prompts generated. Developer can paste Cursor prompt into Cursor and get correct UI.
+Edge case handling
+Tailwind-heavy, CSS-in-JS, and CSS-variable sites all extract with ≥97% accuracy.
+CWS update
+V2 published as an update to the existing CWS listing.
+ Week 4  —  Screenshot Pipeline   [V2]
+#
+Task
+Doc ref
+File / module
+Hours
+4-01
+Request unlimitedStorage optional permission at V2 first launch (detect via Settings.schemaVersion). Show panel notification before triggering permission dialog. Match Schema §14.3.
+Schema §14.3
+background/index.ts
+1h
+4-02
+Write screenshot capture in SW: CAPTURE_SCREENSHOT → chrome.tabs.captureVisibleTab(null, { format:"png" }) → return dataUrl.
+TRD §10 Flow §11
+background/handlers/screenshot.ts
+1h
+4-03
+Write scroll-and-stitch in content script: record dimensions, hide sticky elements, disable smooth-scroll, tile loop (150ms settle, 50-tile cap), restore page state, send STITCH_TILES. Match TRD §10.1 exactly.
+TRD §10.1 Flow §11.1
+content/isolated/extractor/screenshot.ts
+3h
+4-04
+DECISION POINT: Use side panel canvas (not OffscreenCanvas in SW). Implement stitchTiles() in a React hook in the panel. Match TRD §21 recommendation.
+TRD §21
+sidepanel/hooks/useStitch.ts
+—
+4-05
+Implement stitchTiles() in panel: create canvas, drawImage each tile at correct y offset, handle partial last tile with clip. Match TRD §10.2.
+TRD §10.2 Flow §11.2
+sidepanel/hooks/useStitch.ts
+2h
+4-06
+Write screenshot storage: canvas.toBlob() → send STORE_SCREENSHOT to SW → db.put("screenshots", record).
+Schema §8.2 Flow §11.2
+background/services/db.ts
+1h
+4-07
+Handle edge cases: infinite scroll (stop when scrollHeight stops increasing), sticky element detection (position:sticky/fixed), max 50 tiles safety limit. Match TRD §10.3.
+TRD §10.3
+content/isolated/extractor/screenshot.ts
+1.5h
+4-08
+Add screenshots ZIP folder to generateFullZIP() in exporter.ts. Match Schema §12.1 folder structure.
+Schema §12.1
+background/services/exporter.ts
+1h
+4-09
+Test screenshot pipeline on 5 sites: stripe.com, linear.app, vercel.com, a Webflow site, a parallax scroll site. Fix stitching artifacts.
+TRD §10.3
+—
+2h
+ Week 5  —  Layout Structure Extraction   [V2]
+#
+Task
+Doc ref
+File / module
+Hours
+5-01
+Write extractor/layout.ts: detect semantic landmarks (<header>, <nav>, <main>, <footer>, <section>) using querySelectorAll.
+TRD §15 Schema §5
+content/isolated/extractor/layout.ts
+1.5h
+5-02
+For non-semantic sections: find large divs (width > 80% viewport, height > 200px) not already captured by landmarks.
+TRD §15.1
+content/isolated/extractor/layout.ts
+1h
+5-03
+For each section: read display, grid-template-columns, flex-direction, gap, align-items, justify-content, padding, backgroundColor, minHeight via getComputedStyle.
+Schema §5
+content/isolated/extractor/layout.ts
+1h
+5-04
+Label each section: apply heuristics (header+nav → "navigation", large section+h1+button → "hero", grid of 3+ similar children → "features", etc.)
+Schema §5 SectionLabel type
+content/isolated/extractor/layout.ts
+1.5h
+5-05
+Detect base grid: find widest container element, read grid-template-columns and gap. Set GridInfo in LayoutStructure.
+Schema §5 GridInfo
+content/isolated/extractor/layout.ts
+1h
+5-06
+Append LayoutStructure to ExtractionResult. Update saveExtraction() to persist it.
+Schema §2
+content/isolated/index.ts
+0.5h
+5-07
+Add layout section info to DESIGN.md generator — insert "## Page Layout" section with grid info + sections table.
+Schema §11.2
+background/services/exporter.ts
+1h
+ Week 6–7  —  Component Detection Engine   [V2]
+This is the highest-effort V2 task — budget 2 full weeks. The component detection algorithm is where StyleSnap's portfolio value lives.
+#
+Task
+Doc ref
+File / module
+Hours
+6-01
+Write extractor/components.ts. Signal 1: Semantic HTML scan — querySelectorAll("button, nav, input, form, header, footer, dialog, select"). Assign base score 0.35 per instance.
+TRD §11.1 Schema §4
+content/isolated/extractor/components.ts
+1h
+6-02
+Signal 2: ARIA role scan — querySelectorAll("[role]"). Add 0.25 to score for elements with role attribute.
+TRD §11.1
+content/isolated/extractor/components.ts
+0.5h
+6-03
+Signal 3: Repeated structure scan. Implement getStructureSignature() — recursive tag+child fingerprint. Match TRD §11.3 code exactly.
+TRD §11.3
+content/isolated/extractor/components.ts
+2h
+6-04
+DECISION POINT: Set component DOM sample limit to 1500 elements (TRD §21). Make it configurable via Settings.domSampleLimit (future).
+TRD §21
+content/isolated/extractor/components.ts
+—
+6-05
+Run getStructureSignature() on all elements with 2+ children (up to 1500). Group by signature. Find patterns with ≥3 instances → add 0.25 score.
+TRD §11.3
+content/isolated/extractor/components.ts
+1h
+6-06
+Signal 4: Class name heuristic — check element.className for "btn", "card", "modal", "badge", "chip", "hero", "avatar", "nav". Add 0.15 if matched.
+TRD §11.1
+content/isolated/extractor/components.ts
+0.5h
+6-07
+Merge all signals per element. Calculate total confidence. Filter: ≥0.60 → confirmed, 0.45–0.59 → uncertain, <0.45 → discard. Deduplicate multi-signal detections.
+TRD §11.2
+content/isolated/extractor/components.ts
+1h
+6-08
+For each confirmed component: extract outerHTML (≤4KB, text truncated to 80 chars, src → placeholder), derive scoped CSS block (non-default computed styles for element + children).
+TRD §11.4 Schema §4
+content/isolated/extractor/components.ts
+2h
+6-09
+Build ComponentsTab.tsx: component cards grid (label, confidence dot, instance count, HTML/CSS preview, Copy HTML + Copy CSS). Collapsed uncertain section. Match UI/UX §4.4.
+UI/UX §4.4 UI/UX §5.5
+sidepanel/components/ComponentsTab.tsx
+3h
+6-10
+Implement manual promote/dismiss for uncertain components in panel (user can add uncertain → confirmed list, or hide it).
+UI/UX §4.4
+sidepanel/components/ComponentsTab.tsx
+1h
+7-01
+Implement components.md generator. Match Schema §11.4 template exactly — HTML + CSS per component, uncertain section at bottom.
+Schema §11.4
+background/services/exporter.ts
+1.5h
+7-02
+Add "Download components.md" button to ComponentsTab.
+UI/UX §4.4
+components/ComponentsTab.tsx
+0.5h
+7-03
+Add components.md to generateFullZIP() output.
+Schema §12.1
+background/services/exporter.ts
+0.5h
+7-04
+Accuracy test: run component detection on stripe.com, linear.app, chakra-ui.com docs. Compare detected components to manually identified list. Target ≥10 components, ≥90% label accuracy.
+TRD §20
+—
+2h
+7-05
+Tune false positive handling: if a detected "component" is actually a nav item or a text span, adjust scoring thresholds. Re-test. Document final thresholds in code comments.
+TRD §11.2
+extractor/components.ts
+2h
+ Week 8  —  AI Prompt Generation Engine   [V2]
+#
+Task
+Doc ref
+File / module
+Hours
+8-01
+Write 5 prompt templates in background/services/promptTemplates.ts: cursor, claude-code, v0, bolt, lovable. Match Schema §11.5 token budget constraints.
+Schema §11.5
+background/services/promptTemplates.ts
+2h
+8-02
+Write generateMasterPrompt(result, tool): inject ExtractionResult data into selected template. Token count estimation (rough: chars/4).
+Schema §11.5
+background/services/exporter.ts
+1.5h
+8-03
+Build AIPromptTab.tsx: tool selector dropdown (5 tools), prompt preview textarea (read-only, monospace), token count badge (amber if >2000), Copy Prompt + Download .txt buttons. Match UI/UX §4.6.
+UI/UX §4.6
+sidepanel/components/AIPromptTab.tsx
+2.5h
+8-04
+Wire tool selector → instant prompt regeneration (synchronous in panel, <100ms). No SW call for generation.
+UI/UX §4.6 Flow §13
+sidepanel/components/AIPromptTab.tsx
+0.5h
+8-05
+Add master prompt files to generateFullZIP() — one .txt per tool: master-prompt-cursor.txt etc. Match Schema §12.1.
+Schema §12.1
+background/services/exporter.ts
+0.5h
+8-06
+Integration test: generate Cursor prompt from stripe.com extraction. Paste into a Cursor project. Verify it produces correct indigo-branded UI without additional prompting.
+Schema §11.5
+—
+1.5h
+8-07
+Add Components tab to TabBar. Add AI Prompt tab. Both visible in V2 build only (check version in manifest).
+UI/UX §3.3
+sidepanel/components/TabBar.tsx
+0.5h
+ Week 9–10  —  Edge Cases + CSS-in-JS + Polish + CWS V2   [V2]
+#
+Task
+Doc ref
+File / module
+Hours
+9-01
+DECISION POINT: Tailwind v4 CSS-first format. Detect @theme block in stylesheets. If found, generate both tailwind.config.js (v3) AND @theme CSS block (v4). Match TRD §21.
+TRD §21
+background/services/exporter.ts
+—
+9-02
+Implement Tailwind v4 @theme CSS generator as additional export option.
+Schema §11.3 TRD §21
+background/services/exporter.ts
+1.5h
+9-03
+Improve CSS-in-JS handling: detect styled-components/Emotion, show warning in panel, add note to exports: "Framework detected: CSS-in-JS. Token extraction uses computed styles (ground truth)."
+TRD §7.4
+extractor/tokens.ts + panel
+1h
+9-04
+Handle iframes: detect cross-origin iframes in asset finder. List them as "iframe (cross-origin — cannot extract)" in the assets panel.
+TRD §10.3
+extractor/assets.ts
+0.5h
+9-05
+Handle port disconnect during long operations: save checkpoint to chrome.storage.session on every EXTRACTION_PROGRESS event. Implement retry-from-checkpoint on reconnect.
+TRD §5.4 Flow §17.3
+background/handlers/extraction.ts
+2h
+9-06
+Add schema migration for V2: Settings schemaVersion 1→2. Add defaultAITool field. openDB() version 1→2 (add screenshots store). Match Schema §13.
+Schema §13
+background/services/db.ts
+1h
+9-07
+Full accuracy audit on 10 reference sites with V2 feature set. Target: tokens ≥97%, components ≥90%, layout labels correct. Fix regressions.
+TRD §20
+—
+3h
+9-08
+Keyboard navigation audit: tab through full panel, verify focus rings visible, all dropdowns keyboard-accessible, Escape closes settings. Match UI/UX §9.3.
+UI/UX §9.3
+All components
+1.5h
+9-09
+Responsive panel audit: resize panel to 280px, verify tab icons-only mode, verify Export dropdown truncates cleanly. Match UI/UX §10.1.
+UI/UX §10.1
+All components
+1h
+10-01
+Write V2 release notes for CWS update. Update description to mention layout, components, AI prompts, screenshots.
+—
+—
+0.5h
+10-02
+Create 3 new CWS screenshots showing Components tab, AI Prompt tab, screenshot export.
+—
+assets/cws/v2/
+1.5h
+10-03
+Update promotional tile (440×280) with V2 feature highlights.
+—
+assets/cws/v2/
+0.5h
+10-04
+Bump version to 2.0.0. Rebuild. Publish V2 update to Chrome Web Store.
+—
+manifest.config.ts
+0.5h
+10-05
+Write V2 portfolio case study entry: component detection algorithm decisions, false positive rate before/after tuning, screenshot stitching challenges. Publish to portfolio site.
+—
+sohamisonline.vercel.app
+2h
+5. Version 3 — Extreme Features  (Weeks 11–12)
+Goal: Add the one feature no competitor has — animation and scroll-effect detection. V3 is the technical showpiece of the portfolio. The MAIN world injection and multi-library detection algorithm are the most technically impressive parts of the entire project.
+V3 Deliverable
+Definition of Done
+Animation detection
+GSAP/ScrollTrigger, AOS, Lenis, Locomotive Scroll, ScrollMagic all detected with ≥90% recall on 10 known sites.
+Three.js/WebGL detection
+Presence detected and reported. Version + draw call stats shown.
+Written descriptions
+Every detected library produces a human-readable description included in all export formats.
+CSP fallback
+Graceful fallback to DOM-only detection when MAIN world injection blocked.
+CWS V3 update
+V3 published. All 3 versions documented in case study.
+ Week 11  —  Animation & Scroll Detection Engine   [V3]
+#
+Task
+Doc ref
+File / module
+Hours
+11-01
+Write content/main-world/animation.ts: the MAIN world script. Add it to web_accessible_resources in manifest.config.ts. This file cannot use chrome.* APIs.
+TRD §13.1 Flow §14.1
+content/main-world/animation.ts
+0.5h
+11-02
+Implement MAIN world injection in SW: chrome.scripting.executeScript({ files:["animation.js"], world:"MAIN" }). Wire to DETECT_ANIMATIONS message.
+Flow §14.1 step 2
+background/handlers/extraction.ts
+0.5h
+11-03
+In ISOLATED content script: attach window.addEventListener("message") to listen for { source:"stylesnap-main" }. Forward AnimationReport to SW.
+Flow §14.1 step 3
+content/isolated/index.ts
+0.5h
+11-04
+GSAP detection: check window.gsap. If present: read window.gsap.version. Read ScrollTrigger.getAll() — extract start, end, scrub, pin, toggleClass, ease per trigger. Build GSAPConfig. Match Schema §6.
+Schema §6 TRD §13.2
+content/main-world/animation.ts
+2h
+11-05
+AOS detection: check window.AOS. Read window.AOS.options. QuerySelectorAll("[data-aos]") — extract animation, duration, delay, easing, offset per element. Group identical combos. Build AOSConfig.
+Schema §6 TRD §13.2
+content/main-world/animation.ts
+1.5h
+11-06
+Lenis detection: check window.lenis. Read lenis.options: duration, easing, smoothWheel, infinite. Build LenisConfig.
+Schema §6 TRD §13.2
+content/main-world/animation.ts
+0.5h
+11-07
+Locomotive Scroll detection: check window.LocomotiveScroll. QuerySelectorAll("[data-scroll]") — extract speed, direction, delay. Build LocomotiveConfig.
+Schema §6 TRD §13.2
+content/main-world/animation.ts
+1h
+11-08
+ScrollMagic detection: check window.ScrollMagic. Framer Motion detection: check window.motion / window.__framer_importedPackages. Three.js: check window.THREE — read revision, canvas count, WebGL version.
+Schema §6 TRD §13.2
+content/main-world/animation.ts
+1.5h
+11-09
+Vanilla scroll heuristic (Tier 3): check for IntersectionObserver usage (document.querySelectorAll("[data-inview]") etc.), CSS transition/animation properties on body children.
+TRD §13.2
+content/main-world/animation.ts
+1h
+11-10
+Assemble AnimationReport from all library results. Assign accuracy tier to each library. Write human-readable description string per library. Post via window.postMessage({ source:"stylesnap-main" }).
+Schema §6 Flow §14.1 step 11
+content/main-world/animation.ts
+1.5h
+11-11
+Implement 3-second timeout: if no postMessage received after injection, ISOLATED script fires ANIMATION_TIMEOUT to SW. SW notifies panel with non-blocking error notice.
+Flow §14.3 E2
+content/isolated/index.ts
+0.5h
+11-12
+Implement CSP fallback in SW: if executeScript throws, send DETECT_ANIMATIONS_DOM_ONLY to CS. CS runs attribute-only scan (data-aos, data-scroll, data-animation). Sets tier to Tier 3.
+Flow §14.3 E1
+background/handlers/extraction.ts
+1h
+11-13
+Add animation section to DESIGN.md generator. Add AnimationReport to all master prompt generators (after components section).
+Schema §11.2 §11.5
+background/services/exporter.ts
+1h
+11-14
+Detection accuracy test: run on 5 known GSAP sites (e.g. awwwards nominees), 3 AOS sites, 2 Lenis sites. Target ≥90% recall. Fix missed detections.
+TRD §20
+—
+2h
+ Week 12  —  UI + Portfolio + Final Polish + CWS V3   [V3]
+#
+Task
+Doc ref
+File / module
+Hours
+12-01
+Build animation section in TokensTab: detected library badges (green pills), expandable trigger detail accordions, accuracy tier label per library, "No animations detected" empty state.
+UI/UX §4.3 Flow §14.2
+sidepanel/components/TokensTab.tsx
+2h
+12-02
+Add animation info to AI Prompt tab: include AnimationReport.summary in all prompt previews. Regenerate when extraction changes.
+UI/UX §4.6
+sidepanel/components/AIPromptTab.tsx
+1h
+12-03
+Add schema migration V3: Settings schemaVersion 2→3. Add enableAnimationDetection field (default true). Match Schema §13.
+Schema §13
+background/services/db.ts
+0.5h
+12-04
+Full 12-site accuracy audit (V1+V2+V3 features together). Fix regressions introduced by V3 changes. Document final accuracy numbers.
+TRD §20
+—
+2h
+12-05
+Performance audit: time token extraction on a 5MB page (< 3s target). Time component detection (< 5s). Time animation detection (< 500ms). Optimise anything above threshold.
+TRD §17
+—
+1.5h
+12-06
+Final keyboard + accessibility audit. Verify all ARIA labels present. Verify reduced-motion preference disables all transitions.
+UI/UX §9
+—
+1h
+12-07
+Write comprehensive README.md: what the extension does, screenshots, features per version, tech stack, how to build and load locally, contribution guide.
+—
+README.md
+1.5h
+12-08
+Write full portfolio case study (all 3 versions): problem → research → architecture decisions (component detection algorithm, MAIN world injection, per-tool prompt tuning) → challenges → results (accuracy %, install count). Publish to portfolio.
+—
+sohamisonline.vercel.app
+3h
+12-09
+Create 3 new CWS screenshots showing animation detection output. Update promotional tile.
+—
+assets/cws/v3/
+1.5h
+12-10
+Bump version to 3.0.0. Rebuild. Publish V3 update to Chrome Web Store. Write public release notes.
+—
+manifest.config.ts
+0.5h
+12-11
+Share on Twitter/X, IndieHackers, Reddit (r/webdev, r/chrome_extensions). Write a dev.to article about the animation detection architecture. Link to CWS listing.
+—
+—
+2h
+6. Open Decision Resolution Schedule
+Four technical decisions were flagged as unresolved in the TRD (§21). Each has a mandatory resolution point in this plan. Do not proceed past the decision week without resolving it.
+#
+Decision
+Resolve by
+Task ref
+Recommendation
+D-01
+D-02
+D-03
+D-04
+7. Testing Milestones
+7.1  Reference Test Sites
+These 12 sites are used throughout the plan for accuracy audits. Each covers a different CSS authoring pattern.
+Site
+Framework
+Tests
+First used
+stripe.com
+Vanilla CSS + variables
+Colors, typography, components
+Week 2
+linear.app
+CSS variables
+Design system tokens
+Week 2
+vercel.com
+CSS variables + Tailwind
+Mixed framework handling
+Week 2
+tailwindcss.com
+Tailwind v3
+Tailwind utility detection
+Week 2
+railway.app
+Tailwind
+Tailwind accuracy
+Week 2
+chakra-ui.com docs
+Emotion (CSS-in-JS)
+CSS-in-JS fallback
+Week 3
+resend.com
+Tailwind
+Component detection
+Week 7
+framer.com
+Framer Motion
+Animation detection
+Week 11
+awwwards.com nominee (any)
+GSAP + ScrollTrigger
+GSAP detection accuracy
+Week 11
+lenis.darkroom.engineering
+Lenis smooth scroll
+Lenis detection
+Week 11
+michalsnik.github.io/aos
+AOS library
+AOS detection
+Week 11
+threejs.org
+Three.js / WebGL
+Three.js presence
+Week 12
+7.2  Accuracy Targets Per Version
+Metric
+V1 target
+V2 target
+V3 target
+Token extraction accuracy (manual audit)
+≥95%
+≥97%
+≥98%
+Component label accuracy (on 5 sites)
+N/A
+≥90%
+≥90%
+Animation library detection recall (10 known sites)
+N/A
+N/A
+≥90%
+Full-page screenshot accuracy (no artifacts)
+N/A
+≥80% of test sites
+≥80%
+Export format validity (parseable JSON, valid JS)
+100%
+100%
+100%
+Panel load time
+<200ms
+<200ms
+<200ms
+Extraction time (typical page)
+<3s
+<5s
+<6s
+8. Chrome Web Store Submission Checklists
+8.1  V1 Submission (end of Week 3)
+Extension icon: 16px, 32px, 48px, 128px PNG versions (no transparency issues)
+Promotional tile: 440×280px PNG (required for featured listing)
+Store screenshots: minimum 1, maximum 5. Use 1280×800px. Show: empty state, tokens tab, asset tab, export.
+Short description: ≤132 characters. Draft: "Extract any website's design system in one click — colours, fonts, spacing, components, and AI-ready prompts."
+Detailed description: explain all V1 features, mention zero backend / privacy-first, link to GitHub repo
+Category: Developer Tools
+Language: English
+Privacy policy URL: hosted page stating no user data is collected or transmitted
+Permissions justification: each permission listed with clear justification (CWS requires this for tabs permission)
+Single purpose description: "Extract and export design systems from any website"
+Run pnpm build, zip the dist/ folder, upload the ZIP
+Test the uploaded version in a clean Chrome profile before submitting
+The "tabs" permission (for captureVisibleTab) requires explicit justification in the CWS submission form. Write: "Required to capture screenshots of the current page for the screenshot export feature." Failing to justify this is the #1 cause of new extension rejections.
+8.2  V2 Update (end of Week 10)
+Bump version to 2.0.0 in manifest.config.ts
+Request unlimitedStorage as optional permission (not required — user is prompted at runtime)
+Add 3 new screenshots showing Components tab, AI Prompt tab, screenshot export
+Update store description to mention layout, components, AI prompts (Cursor/Claude Code/v0/Bolt/Lovable), screenshots
+Write What's New text (≤500 chars) for the CWS update
+Test migration: install V1, extract a page, update to V2, verify history entry still loads correctly
+8.3  V3 Update (end of Week 12)
+Bump version to 3.0.0
+Add animation.js to web_accessible_resources (already in manifest from V3 Week 11)
+Add 3 new screenshots showing animation detection output for a GSAP-heavy site
+Update store description to highlight animation/scroll detection as the headline V3 feature
+Write What's New text: "V3: Detect GSAP, AOS, Lenis, Locomotive Scroll, ScrollMagic, Framer Motion, and Three.js on any page."
+Test MAIN world injection on 5 different animation sites before submitting
+9. Portfolio Documentation Guide
+StyleSnap is a deep portfolio piece. Document it thoroughly during the build — not after. The case study is what gets you clients and interviews, not the extension itself.
+9.1  What to Capture During Build
+Week 2: Screenshot the panel showing stripe.com extraction result. This is your hero image.
+Week 6–7: Record a GIF of component detection running on a real site (card + button + nav detected). This demonstrates the most impressive algorithm.
+Week 11: Record the animation detection output on a GSAP ScrollTrigger-heavy site — show the trigger list with start/end/scrub values. This is uniquely impressive.
+Every version: note the exact accuracy numbers from your audit. Real numbers (e.g. "94.7% color accuracy before tuning, 97.2% after") are far more convincing than vague claims.
+Note every technical challenge and how you solved it — false positive rate in component detection, sticky element artifacts in screenshots, CSP fallback for animation detection.
+9.2  Case Study Structure
+Section
+Content
+Problem
+Screenshot of the gap in existing tools. Competitor comparison table from PRD §2.2.
+Research
+What you found in Design System Extractor + DESIGN.md. Why neither was sufficient.
+Architecture
+Four-context model diagram (from Extension Flow §2). Why MAIN world is needed for animations.
+Technical deep-dive #1
+Component detection algorithm: structure signatures, confidence scoring, false positive tuning.
+Technical deep-dive #2
+Animation detection: MAIN world injection, per-library globals, accuracy tiers.
+Results
+CWS install count, accuracy numbers, demo GIF. Screenshots of output on 3 real sites.
+What I learned
+Chrome extension MV3 constraints, getComputedStyle performance, prompt engineering for different AI tools.
+9.3  Where to Publish
+sohamisonline.vercel.app — primary portfolio (add project card with hero screenshot)
+github.com/SohamB-ai/stylesnap-extension — public repo with detailed README
+dev.to — technical article about the animation detection architecture (drives organic traffic)
+Twitter/X thread — 5-tweet thread with GIF demos at each version ship (V1, V2, V3)
+10. Risk Register
+Risk
+Version
+Likelihood
+Impact
+Mitigation
+Component detection produces too many false positives on complex sites
+CWS rejects extension for "tabs" permission
+MAIN world injection blocked on specific sites (CSP)
+Service worker terminates mid-extraction
+Screenshot stitching produces artifacts on parallax/sticky sites
+Tailwind utility class detection misidentifies design tokens
+IndexedDB quota exceeded before unlimitedStorage granted
+GSAP site does not expose window.gsap (bundled without global)
+11. Full Timeline at a Glance
+Week
+Version
+Theme
+Key deliverable
+Phase 0
+Week 1
+Week 2
+Week 3
+Week 4
+Week 5
+Weeks 6–7
+Week 8
+Weeks 9–10
+Week 11
+Week 12
+12. Document History
+Version
+Date
+Author
+Changes
+v1.0
+July 2026
+Guru (Soham Belwadkar)
+Initial plan — Phase 0 + 12 weeks + open decisions + CWS checklists + portfolio guide + risk register

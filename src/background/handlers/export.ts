@@ -3,7 +3,7 @@
 import JSZip from "jszip";
 import { MessageType, ExportFilePayload } from "../../shared/messages";
 import { loadExtraction } from "../services/db";
-import { generateTokensJSON, generateDesignMD, generateTailwindConfig } from "../services/exporter";
+import { generateTokensJSON, generateDesignMD, generateSkillMD, generateTailwindConfig } from "../services/exporter";
 
 export async function handleExportFile(payload: ExportFilePayload): Promise<void> {
   const result = await loadExtraction(payload.extractionId);
@@ -36,6 +36,11 @@ export async function handleExportFile(payload: ExportFilePayload): Promise<void
     case "design-md":
       content = generateDesignMD(result);
       filename = `DESIGN-${originSlug}-${dateSlug}.md`;
+      mimeType = "text/markdown";
+      break;
+    case "skill-md":
+      content = generateSkillMD(result);
+      filename = `SKILL-${originSlug}-${dateSlug}.md`;
       mimeType = "text/markdown";
       break;
     case "tailwind-config":

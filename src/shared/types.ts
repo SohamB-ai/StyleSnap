@@ -125,6 +125,7 @@ export interface ZIndexToken {
 }
 
 export interface DesignTokens {
+  themeSummary?: string;
   colors: ColorToken[];
   typography: TypographySystem;
   spacing: SpacingScale;
@@ -189,6 +190,7 @@ export interface ExtractionResult {
 
 export type ExportFormat =
   | "design-md"
+  | "skill-md"
   | "tokens-json"
   | "tailwind-config"
   | "components-md"

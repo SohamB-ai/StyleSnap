@@ -31,19 +31,30 @@ interface ParsedColor {
   hslStr: string;
 }
 
-function parseColor(colorStr: string): ParsedColor | null {
-  if (!colorStr || colorStr === "transparent" || colorStr === "rgba(0, 0, 0, 0)") return null;
+const parsedColorCache = new Map<string, ParsedColor | null>();
+let ctxCanvas: CanvasRenderingContext2D | null = null;
 
-  // Create temporary canvas / element parsing if needed or parse rgb/rgba/hex string directly
+function parseColor(colorStr: string): ParsedColor | null {
+  if (!colorStr || colorStr === "transparent" || colorStr === "rgba(0, 0, 0, 0)" || colorStr === "inherit" || colorStr === "initial") {
+    return null;
+  }
+
+  if (parsedColorCache.has(colorStr)) {
+    return parsedColorCache.get(colorStr)!;
+  }
+
   let r = 0, g = 0, b = 0, a = 1;
 
   if (colorStr.startsWith("rgb")) {
     const match = colorStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
     if (match) {
-      r = parseInt(match[1]);
-      g = parseInt(match[2]);
-      b = parseInt(match[3]);
+      r = parseInt(match[1], 10);
+      g = parseInt(match[2], 10);
+      b = parseInt(match[3], 10);
       if (match[4] !== undefined) a = parseFloat(match[4]);
+    } else {
+      parsedColorCache.set(colorStr, null);
+      return null;
     }
   } else if (colorStr.startsWith("#")) {
     let hex = colorStr.replace("#", "");
@@ -52,10 +63,40 @@ function parseColor(colorStr: string): ParsedColor | null {
       r = parseInt(hex.substring(0, 2), 16);
       g = parseInt(hex.substring(2, 4), 16);
       b = parseInt(hex.substring(4, 6), 16);
+    } else {
+      parsedColorCache.set(colorStr, null);
+      return null;
     }
   } else {
-    // Fallback for named colors
-    return null;
+    // Canvas-based fallback for named colors, lab, oklch, etc.
+    try {
+      if (!ctxCanvas && typeof document !== "undefined") {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1;
+        canvas.height = 1;
+        ctxCanvas = canvas.getContext("2d", { willReadFrequently: true });
+      }
+      if (ctxCanvas) {
+        ctxCanvas.clearRect(0, 0, 1, 1);
+        ctxCanvas.fillStyle = colorStr;
+        ctxCanvas.fillRect(0, 0, 1, 1);
+        const data = ctxCanvas.getImageData(0, 0, 1, 1).data;
+        if (data[3] === 0 && colorStr !== "transparent") {
+          parsedColorCache.set(colorStr, null);
+          return null;
+        }
+        r = data[0];
+        g = data[1];
+        b = data[2];
+        a = parseFloat((data[3] / 255).toFixed(2));
+      } else {
+        parsedColorCache.set(colorStr, null);
+        return null;
+      }
+    } catch {
+      parsedColorCache.set(colorStr, null);
+      return null;
+    }
   }
 
   // Convert RGB to HSL
@@ -82,7 +123,7 @@ function parseColor(colorStr: string): ParsedColor | null {
   const lPct = Math.round(l * 100);
   const hexStr = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
 
-  return {
+  const res: ParsedColor = {
     hex: hexStr,
     h: hDeg,
     s: sPct,
@@ -91,22 +132,29 @@ function parseColor(colorStr: string): ParsedColor | null {
     rgbStr: `rgb(${r}, ${g}, ${b})`,
     hslStr: `hsl(${hDeg} ${sPct}% ${lPct}%)`
   };
+
+  parsedColorCache.set(colorStr, res);
+  return res;
 }
+
 
 // Color Naming Heuristic
 function getSuggestedColorName(parsed: ParsedColor, index: number): string {
   const { h, s, l } = parsed;
-  if (l <= 10) return "Black / Dark Neutral";
-  if (l >= 95) return "White / Light Neutral";
-  if (s <= 12) return l > 50 ? "Light Gray" : "Dark Gray";
+  if (l <= 8) return "Pure Black";
+  if (l <= 18) return "Dark Neutral / Background";
+  if (l >= 96) return "Pure White";
+  if (l >= 90) return "Light Neutral / Surface";
+  if (s <= 10) return l > 50 ? "Cool Gray" : "Slate Gray";
 
-  if (h >= 345 || h < 15) return "Crimson Red";
+  if (h >= 345 || h < 15) return "Vibrant Red";
   if (h >= 15 && h < 45) return "Amber Orange";
-  if (h >= 45 && h < 70) return "Warm Yellow";
+  if (h >= 45 && h < 70) return "Gold Yellow";
   if (h >= 70 && h < 165) return "Emerald Green";
   if (h >= 165 && h < 200) return "Cyan Teal";
-  if (h >= 200 && h < 260) return "Electric Indigo / Blue";
-  if (h >= 260 && h < 315) return "Deep Purple";
+  if (h >= 200 && h < 250) return "Electric Blue";
+  if (h >= 250 && h < 280) return "Indigo Accent";
+  if (h >= 280 && h < 315) return "Royal Purple";
   if (h >= 315 && h < 345) return "Magenta Pink";
 
   return `Color ${index + 1}`;
@@ -115,13 +163,30 @@ function getSuggestedColorName(parsed: ParsedColor, index: number): string {
 // Semantic Classification
 function classifySemanticGroup(parsed: ParsedColor, frequency: number, isTop: boolean): SemanticGroup {
   const { h, s, l } = parsed;
-  if (s <= 15) return "neutral";
-  if (h >= 120 && h <= 150 && s > 40) return "semantic-success";
-  if (h >= 35 && h <= 55 && s > 50) return "semantic-warning";
-  if ((h >= 345 || h <= 15) && s > 50) return "semantic-error";
+  if (s <= 12) return "neutral";
+  if (h >= 120 && h <= 155 && s > 35) return "semantic-success";
+  if (h >= 30 && h <= 55 && s > 45) return "semantic-warning";
+  if ((h >= 345 || h <= 18) && s > 45) return "semantic-error";
   if (isTop) return "primary";
-  if (frequency > 20) return "secondary";
+  if (frequency > 15) return "secondary";
   return "accent";
+}
+
+// Theme Summary Generator
+function generateThemeSummary(colors: ColorToken[], framework: string): string {
+  if (!colors.length) return "Modern web application design system.";
+  
+  const bgColors = colors.filter(c => c.contexts.includes("background"));
+  const primaryBg = bgColors[0] || colors[0];
+  const isDark = primaryBg ? (parseColor(primaryBg.hex)?.l ?? 50) < 40 : true;
+
+  const accentColor = colors.find(c => c.semanticGroup === "primary" || c.semanticGroup === "accent") || colors[0];
+  const accentName = accentColor ? accentColor.suggestedName : "accent";
+
+  const modeStr = isDark ? "Dark mode" : "Light mode";
+  const frameworkStr = framework && framework !== "unknown" && framework !== "vanilla" ? ` with ${framework}` : "";
+  
+  return `${modeStr} design system featuring ${accentName} palette, clean visual hierarchy${frameworkStr}.`;
 }
 
 // Phase 1: Scan Stylesheets
@@ -175,12 +240,18 @@ export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; 
   const shadowCounts = new Map<string, number>();
   const radiusCounts = new Map<string, number>();
 
-  const elements = Array.from(document.querySelectorAll("*"))
-    .filter((el) => {
-      const rect = el.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    })
-    .slice(0, domLimit);
+  const rawList = Array.from(document.querySelectorAll<HTMLElement>(
+    "body, header, footer, nav, main, section, article, aside, form, button, a, h1, h2, h3, h4, h5, h6, input, div, span, p"
+  ));
+  const elements: HTMLElement[] = [];
+  const maxElements = Math.min(domLimit, 350);
+
+  for (const el of rawList) {
+    if (elements.length >= maxElements) break;
+    if (el.offsetWidth > 0 || el.offsetHeight > 0) {
+      elements.push(el);
+    }
+  }
 
   let tailwindClassHits = 0;
   let styledComponentHits = 0;
@@ -278,14 +349,14 @@ export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; 
 
   let colorIdx = 0;
   for (const { parsed, count, contexts } of rawColors) {
-    // Check if close to an already clustered color token
+    // Check if close to an already clustered color token (tighter tolerance: +-3 hue, +-7% sat/lightness)
     const existing = colorTokens.find((t) => {
       const p = parseColor(t.hex);
       if (!p) return false;
       return (
-        Math.abs(p.h - parsed.h) <= 5 &&
-        Math.abs(p.s - parsed.s) <= 10 &&
-        Math.abs(p.l - parsed.l) <= 10
+        Math.abs(p.h - parsed.h) <= 3 &&
+        Math.abs(p.s - parsed.s) <= 7 &&
+        Math.abs(p.l - parsed.l) <= 7
       );
     });
 
@@ -383,7 +454,7 @@ export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; 
   const isGrid = spacingValues.every((v) => v.px % 4 === 0);
 
   // Normalize Shadows
-  const shadowTokens: ShadowToken[] = Array.from(shadowCounts.entries()).map(([val, freq], idx) => {
+  const shadowTokens: ShadowToken[] = Array.from(shadowCounts.entries()).map(([val, freq]) => {
     let level: ElevLevel = "md";
     if (val.includes("1px") || val.includes("2px")) level = "sm";
     else if (val.includes("12px") || val.includes("16px")) level = "lg";
@@ -429,7 +500,10 @@ export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; 
     ? sheetBreakpoints.map((px) => ({ px, em: `${px / 16}em`, label: px >= 1200 ? "xl" : px >= 992 ? "lg" : px >= 768 ? "md" : "sm" }))
     : defaultBreakpoints;
 
+  const themeSummary = generateThemeSummary(colorTokens, detectedFramework);
+
   const tokens: DesignTokens = {
+    themeSummary,
     colors: colorTokens,
     typography: {
       families,

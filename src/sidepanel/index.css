@@ -4,43 +4,66 @@
 
 @layer base {
   :root[data-theme="dark"] {
-    --bg-base: #0F0F11;
-    --bg-surface: #1A1A1F;
-    --bg-elevated: #222228;
-    --bg-hover: #2A2A32;
-    --border: #2D2D35;
-    --text-primary: #F9FAFB;
-    --text-secondary: #9CA3AF;
-    --text-muted: #4B5563;
-    --accent: #4F46E5;
-    --accent-hover: #4338CA;
-    --accent-subtle: #1E1B4B;
-    --success: #10B981;
-    --warning: #F59E0B;
+    --bg-base: #000000;
+    --bg-surface: #0A0A0A;
+    --bg-elevated: #171717;
+    --bg-hover: #262626;
+    --border: #262626;
+    --text-primary: #FAFAFA;
+    --text-secondary: #A1A1AA;
+    --text-muted: #52525B;
+    --accent: #FFFFFF;
+    --accent-hover: #E4E4E7;
+    --accent-subtle: #18181B;
+    --success: #22C55E;
+    --warning: #EAB308;
     --error: #EF4444;
   }
 
   :root[data-theme="light"] {
     --bg-base: #FFFFFF;
-    --bg-surface: #F9FAFB;
-    --bg-elevated: #F3F4F6;
-    --bg-hover: #E5E7EB;
-    --border: #E5E7EB;
-    --text-primary: #111827;
-    --text-secondary: #6B7280;
-    --text-muted: #9CA3AF;
-    --accent: #4F46E5;
-    --accent-hover: #4338CA;
-    --accent-subtle: #EEF2FF;
-    --success: #10B981;
-    --warning: #F59E0B;
+    --bg-surface: #FAFAFA;
+    --bg-elevated: #F4F4F5;
+    --bg-hover: #E4E4E7;
+    --border: #E4E4E7;
+    --text-primary: #09090B;
+    --text-secondary: #71717A;
+    --text-muted: #A1A1AA;
+    --accent: #18181B;
+    --accent-hover: #27272A;
+    --accent-subtle: #F4F4F5;
+    --success: #22C55E;
+    --warning: #EAB308;
     --error: #EF4444;
   }
 
   body {
     background-color: var(--bg-base);
     color: var(--text-primary);
+    width: 380px;
+    height: 540px;
+    margin: 0;
+    overflow: hidden;
   }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-base);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 /* Custom Skeleton Shimmer Animation */

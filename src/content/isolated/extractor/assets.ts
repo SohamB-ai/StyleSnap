@@ -42,10 +42,14 @@ export function scanAssets(): AssetManifest {
     });
   });
 
-  // 3. Scan CSS background-image
-  const bgElements = Array.from(document.querySelectorAll("*")).slice(0, 500);
-  bgElements.forEach((el) => {
-    const bg = getComputedStyle(el).backgroundImage;
+  // 3. Scan CSS background-image (targeted selectors to avoid reflow overhead)
+  const bgCandidateElements = Array.from(document.querySelectorAll<HTMLElement>(
+    "header, section, main, hero, nav, [class*='bg'], [style*='background']"
+  )).slice(0, 80);
+
+  bgCandidateElements.forEach((el) => {
+    const inlineBg = el.style.backgroundImage;
+    const bg = inlineBg || getComputedStyle(el).backgroundImage;
     if (bg && bg.startsWith("url(") && !bg.includes("data:")) {
       const match = bg.match(/url\(['"]?(.*?)['"]?\)/);
       if (match && match[1]) {

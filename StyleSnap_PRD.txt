@@ -1,0 +1,246 @@
+StyleSnap
+Chrome Extension
+Product Requirements Document  ·  v1.0
+Author Guru (Soham Belwadkar)
+Status Draft v1.0
+Date July 2026
+Product Omenova Studio
+1. Executive Summary
+StyleSnap is a Manifest V3 Chrome extension that lets any developer visit a website, click a single button, and receive a complete, developer-ready design system — covering tokens, layout structure, component code, and AI-tool-optimised prompts — without needing a UI/UX designer or a paid design tool.
+The two closest existing tools (Design System Extractor by noti.vn and DESIGN.md / TypeUI) each solve a slice of this problem. StyleSnap is the first extension to unify all three pillars in one product:
+Pillar
+What it means
+AI-Prompt-First
+Every extraction outputs a ready-to-paste master prompt tuned for Cursor, Claude Code, v0, Bolt, or Lovable
+Visual Fidelity
+Captures layout structure and screenshots, not just token values, so rebuilds look right
+Full Package
+Tokens + layout + component code + assets — nothing left for the developer to hunt down manually
+StyleSnap is designed as a portfolio-grade, production-quality project delivered across three progressive versions, each shippable to the Chrome Web Store.
+2. Problem Statement
+2.1  The Developer Pain Point
+A developer finds a website whose look and feel they want to replicate. Currently their options are:
+Hire a UI/UX designer to produce Figma files — expensive, slow (days or weeks)
+Manually inspect every element in DevTools — accurate but extremely tedious (hours)
+Use an existing extraction extension — partially useful, but incomplete output
+2.2  Gap in Existing Tools
+Feature
+Design System Extractor
+DESIGN.md / TypeUI
+StyleSnap (V1–V3)
+Design token extraction
+✅ Yes
+✅ Yes
+✅ Yes
+Per-AI-tool tuned prompts
+❌ No
+⚠️ Generic only
+✅ Per-tool (V2)
+Layout / section structure
+❌ No
+❌ No
+✅ Yes (V2)
+Component detection + code
+⚠️ Single element only
+❌ No
+✅ Yes (V2)
+Screenshot bundle
+❌ No
+❌ No
+✅ Yes (V2)
+Animation/scroll detection
+❌ No
+❌ No
+✅ Yes (V3)
+Chrome Web Store users
+~767
+~20,000
+Target: 5,000 by V2
+3. Goals & Non-Goals
+3.1  Goals
+Deliver a free, fully client-side Chrome extension with zero backend infrastructure
+Match and exceed all features present in both reference extensions at V1
+Introduce layout, component, and AI-prompt features that no competitor offers at V2
+Add animation and 3D/WebGL detection in V3
+Produce a portfolio-quality case study documenting architecture decisions and trade-offs
+Publish to the Chrome Web Store at each version milestone
+3.2  Non-Goals
+No backend server, user accounts, or paid tier at V1–V2
+No support for Firefox or Safari at V1–V2 (Chrome-only)
+No pixel-perfect full-page reconstruction or Figma file export
+No reverse-engineering of minified/obfuscated JavaScript logic
+Full 3D scene reconstruction from WebGL/Three.js is out of scope (detection + stats only)
+4. Target Users
+User Type
+Profile
+Primary Need
+Solo/Freelance Developer
+No dedicated designer; builds client sites rapidly
+Fast, actionable design specs
+AI-Coder / Indie Builder
+Uses Cursor, v0, Bolt, Claude Code daily; needs high-quality context for accurate AI-generated UI
+Ready-to-paste AI master prompt
+Agency / Dev Team
+Competitor analysis, rapid prototyping, design system audits
+Structured token/component exports
+5. Product Versioning
+StyleSnap is delivered across three progressive versions, each independently shippable to the Chrome Web Store.
+Version 1  —  Core Parity (Accurate Basics)
+Goal: Build a solid, accurate, free extension that matches everything both reference extensions offer. Nothing fancy — but more reliable and better UI than either competitor.
+Design token extraction: colors (with usage frequency + context), typography (families, sizes, weights, line-height, letter-spacing), spacing scale, border-radius values, box shadows, z-index scale, breakpoints
+Export formats: DESIGN.md (AI-readable markdown), tokens.json, Tailwind config (tailwind.config.js)
+Element inspector: hover over any element on the page → copy its full computed CSS and HTML snippet
+Asset finder: scan and preview all SVGs, images, and icons on the page with downloadable ZIP export
+Side panel UI: persistent React-based side panel (Chrome Side Panel API) — clean, non-intrusive
+One-click Extract Full Page button
+Extraction history: last 10 extractions saved locally (chrome.storage.local)
+V1 timeline target: 3 weeks
+Version 2  —  Upgraded Accuracy & Depth
+Goal: Introduce features that neither competitor has, pulling StyleSnap clearly ahead.
+Layout/structure extraction: section-by-section page breakdown (hero, nav, footer, grid system, flex patterns, column counts, gap values, responsive behaviour per breakpoint)
+Component detection: identify recurring UI patterns — buttons, cards, navbars, forms, modals, badges — extract their HTML structure and computed CSS as reusable, copy-ready code snippets
+components.md export: a structured component library file generated from extracted components
+Per-AI-tool master prompt: tuned prompt templates for Cursor, Claude Code, v0, Bolt, and Lovable — each AI tool gets a prompt structured to its own conventions and context-window preferences
+Screenshot bundle: full-page screenshot + per-section screenshots, exported as a ZIP for visual reference
+Edge-case handling: Tailwind utility-class-heavy sites, CSS-in-JS (styled-components, Emotion), CSS custom property (variable) cascade resolution
+V2 timeline target: weeks 4–10
+Version 3  —  Extreme Features
+Goal: The definitive version — adds animation/scroll detection and 3D/WebGL presence identification, features no competitor currently ships.
+Animation & scroll-effect detection: GSAP + ScrollTrigger, Framer Motion, AOS, Lenis, Locomotive Scroll, ScrollMagic — outputs written description of detected effects (e.g. "Hero section: GSAP ScrollTrigger, pin + scrub, 0.8s ease-out, trigger at 20% viewport entry")
+Detection method: inject content script into page main world; read window globals (window.gsap, ScrollTrigger.getAll(), window.LocomotiveScroll) and DOM data attributes (data-aos, data-scroll) for accurate library-level detection
+Detection accuracy tiers documented in output: Tier 1 (library-based — highly accurate), Tier 2 (heuristic — approximate), Tier 3 (vanilla custom scroll — presence only)
+3D/WebGL detection: Three.js presence (window.THREE), renderer info, draw call stats — best-effort, not full scene reconstruction
+Stretch: diff mode (compare two sites' design systems), clone confidence score, direct push to Cursor/v0 project
+V3 timeline target: weeks 11–12
+6. Feature Details
+6.1  Design Token Extraction
+The extraction engine runs as an injected content script scanning all rendered elements via getComputedStyle(). It identifies and deduplicates:
+Colors: background-color, color, border-color, outline-color — ranked by frequency of occurrence across the DOM, grouped into primary/secondary/accent/neutral/semantic palettes
+Typography: font-family, font-size, font-weight, line-height, letter-spacing, text-transform — deduplicated into a type scale (H1–H6 + body + caption)
+Spacing: all margin and padding values normalised to a rem/px scale, identifying repeating intervals as the spacing system
+Shadows: box-shadow values deduplicated into an elevation scale (0, sm, md, lg, xl)
+Border radii: all border-radius values deduplicated and named (none, sm, md, lg, full)
+Breakpoints: detected by scanning @media queries via the CSSStyleSheet API
+6.2  Element Inspector
+On activation, the content script attaches mouseover and click listeners to the live page. Hovering highlights the element with a bounding-box overlay; clicking freezes the selection and displays its computed CSS + outerHTML in the side panel with a one-click copy button. Escape clears the selection.
+6.3  Asset Finder
+Scans the DOM for all <img>, <svg>, <picture>, <video>, and CSS background-image references. Displays thumbnails in a grid inside the side panel. Each asset can be individually copied (URL or data URI) or all assets exported as a ZIP archive via the browser File System Access API.
+6.4  Export Formats
+Format
+Content
+Available from
+DESIGN.md
+AI-readable full design system in markdown
+V1
+tokens.json
+Machine-readable design tokens (W3C token format)
+V1
+tailwind.config.js
+Drop-in Tailwind v3/v4 config with extracted theme
+V1
+components.md
+Extracted component library with code snippets
+V2
+Master Prompt (.txt)
+Per-AI-tool ready-to-paste prompt (Cursor / Claude Code / v0 / Bolt / Lovable)
+V2
+Screenshot ZIP
+Full-page + per-section screenshots for visual reference
+V2
+6.5  Side Panel UI
+Built with React 18 + Tailwind CSS, rendered in the Chrome Side Panel (chrome.sidePanel API, available since Chrome 114). The panel persists as the user scrolls or interacts with the page — it does not close on navigation like a popup would.
+Tabs: Tokens · Components · Assets · AI Prompt · History
+Live preview: color swatches, font specimens, spacing visualiser
+Export target selector: choose AI tool before copying master prompt
+Dark/light theme toggle (inherits system preference by default)
+Extraction history: last 10 sessions stored in chrome.storage.local, each searchable by URL/date
+7. Success Metrics
+Metric
+V1 Target
+V2 Target
+V3 Target
+Chrome Web Store installs
+200+
+2,000+
+5,000+
+Average rating
+≥ 4.0 / 5
+≥ 4.3 / 5
+≥ 4.5 / 5
+Token extraction accuracy (manual audit of 10 test sites)
+≥ 95%
+≥ 97%
+≥ 98%
+Animation library detection recall (10 known sites)
+N/A
+N/A
+≥ 90%
+Portfolio case study published
+After V1 ship
+After V2 ship
+After V3 ship
+8. Constraints & Assumptions
+8.1  Technical Constraints
+Must use Manifest V3 — Manifest V2 is being deprecated in Chrome by end of 2025
+Content scripts run in an isolated world by default; reading page JS globals (for animation detection) requires executing scripts in the "MAIN" world via chrome.scripting.executeScript
+chrome.storage.local has a 5MB limit by default; the "unlimitedStorage" permission is required for storing screenshot data. Screenshots will use IndexedDB as primary blob storage
+Service workers (background scripts in MV3) are ephemeral — they terminate when idle. No persistent in-memory state is possible; all state must be persisted to chrome.storage or IndexedDB before the worker sleeps
+The chrome.tabs.captureVisibleTab API can only capture the visible viewport, not a full page in one call — full-page screenshots require scroll-and-stitch logic
+Sites using strict Content Security Policy (CSP) may block injected scripts in certain contexts
+8.2  Assumptions
+The developer is the primary user — the UI can be information-dense; it does not need to be beginner-friendly
+All processing runs fully client-side in the browser — no external API calls required for V1–V2
+The extension targets Chrome 114+ (side panel API availability)
+Privacy-first: no user data leaves the browser at any version
+9. Risks & Mitigations
+Risk
+Likelihood
+Impact
+Mitigation
+Component detection heuristics produce too many false positives
+High
+High
+Build a confidence-score system; only surface components above a threshold. User can override.
+Sites with heavy CSS-in-JS produce incomplete token maps
+Medium
+Medium
+Detect CSS-in-JS usage and warn the user; fall back to computed styles as ground truth
+Chrome Web Store review rejection
+Low
+High
+Request only minimum permissions (activeTab, scripting, storage, sidePanel). No remote code execution.
+Animation detection misses obfuscated or bundled GSAP
+Medium
+Low
+Fall back to heuristic detection (CSS transition/animation property scanning, IntersectionObserver detection)
+CSP blocks content script injection on some sites
+Low
+Medium
+Display a clear error state in the panel with guidance; document known incompatible site patterns
+10. Out of Scope (All Versions)
+Full Figma file export or reverse Figma import
+Full 3D scene reconstruction from WebGL/Three.js (detection + metadata only)
+User authentication, cloud sync, or collaboration features
+Firefox or Safari support at V1–V2
+Reverse-engineering of minified or obfuscated JavaScript application logic
+Automated accessibility auditing (separate product territory)
+11. Appendix
+11.1  Reference Extensions
+Design System Extractor by noti.vn — chrome.google.com/webstore, ~767 users, v1.0, updated May 2026
+DESIGN.md Style Extractor by TypeUI / Bergside SRL — chrome.google.com/webstore, ~20,000 users, v0.4.0, updated April 2026
+11.2  Glossary
+Design Token: a named value representing a design decision (e.g. --color-primary: #4F46E5)
+Master Prompt: a structured plain-text prompt containing the full design system context, ready to paste into an AI coding tool
+MV3: Manifest Version 3, the current Chrome extension architecture standard
+Side Panel: a persistent browser-native panel alongside the active tab, available since Chrome 114
+MAIN world: the page's own JavaScript execution context, distinct from the isolated content script context
+Tier 1/2/3: StyleSnap's internal accuracy classification for animation detection confidence
+11.3  Document History
+Version
+Date
+Author
+Changes
+v1.0
+July 2026
+Guru (Soham Belwadkar)
+Initial PRD — all three versions defined

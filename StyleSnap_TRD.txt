@@ -1,0 +1,529 @@
+StyleSnap
+Chrome Extension
+Technical Requirements Document  ·  v1.0
+Author  Guru (Soham Belwadkar)
+Status  Draft v1.0
+Date  July 2026
+Companion to  StyleSnap PRD v1.0
+Product  Omenova Studio
+1. Overview & Scope
+This Technical Requirements Document (TRD) defines the complete technical architecture, data flows, algorithms, APIs, storage schema, build toolchain, and error-handling strategy for StyleSnap — a Manifest V3 Chrome extension that extracts design systems from live web pages and produces developer-ready output for manual workflows and AI coding tools.
+The TRD is version-aware. Sections marked [V1], [V2], or [V3] describe features scoped to that release. Architecture decisions made at V1 that intentionally anticipate V2/V3 are flagged accordingly.
+All implementation must be fully client-side — no external API calls, no backend server, no user data transmitted off-device at any version.
+2. Technology Stack
+Layer
+Choice
+Rationale
+Extension API
+Chrome Manifest V3
+MV2 deprecated Jun 2025; MV3 required for all new CWS submissions
+Build tool
+Vite 6 + CRXJS v2.6.1
+CRXJS now supports Vite 6–8; HMR for extension pages; handles MV3 output correctly
+UI framework
+React 18 + TypeScript 5
+Matches existing stack; strong typing critical for complex message protocols
+Styling
+Tailwind CSS v3
+v4 is CSS-first and harder to scope inside extension shadow DOM; v3 JIT is sufficient
+Package manager
+pnpm
+Faster installs, disk-efficient, strict dependency resolution
+Linting/formatting
+ESLint + Prettier
+Standard; enforces consistent code style across 5+ script contexts
+Node target
+Node 20 LTS
+LTS stability; native TypeScript support in Node 23 is useful but not required
+State (side panel)
+Zustand
+Lightweight; no boilerplate; works well for UI state independent of Chrome storage
+DB library
+idb (v8)
+Typed promise-based wrapper over IndexedDB; widely maintained; no heavy deps
+ZIP export
+JSZip v3
+Client-side ZIP creation for asset bundles and screenshot exports
+File download
+chrome.downloads API
+Reliable; works in service worker context; no File System Access API quirks
+3. System Architecture
+3.1  Four-Context Model
+StyleSnap runs across four isolated execution contexts that must communicate via the Chrome messaging API. Each context has distinct capabilities and limitations.
+Context
+World
+DOM Access
+Chrome API Access
+Service Worker (Background)
+N/A — no DOM
+None
+Full chrome.* API, captureVisibleTab, downloads, storage
+Content Script — ISOLATED
+ISOLATED
+Full DOM read/write
+Limited: chrome.storage, chrome.runtime, chrome.scripting
+Content Script — MAIN
+MAIN (page context)
+Full DOM + page JS globals
+None — no chrome.* access
+Side Panel (React UI)
+Extension page
+None (extension page)
+Full chrome.* API, chrome.runtime messaging
+3.2  Communication Flow
+The three-layer bridge pattern used for all inter-context communication:
+MAIN world script  └──> window.postMessage({ source: "stylesnap-main", ... })         └──> ISOLATED content script listens via window.addEventListener("message")                └──> chrome.runtime.sendMessage({ type: "EXTRACTION_RESULT", ... })                       └──> Service Worker (chrome.runtime.onMessage)                              └──> chrome.runtime.sendMessage to Side Panel                                     └──> Side Panel receives, updates Zustand store
+For long-running extraction operations (screenshot stitching, full DOM walk), the ISOLATED content script establishes a port-based connection via chrome.runtime.connect() to keep the service worker alive during the operation.
+3.3  Project File Structure
+stylesnap/├── src/│   ├── background/│   │   ├── index.ts              # Service worker entry — registers all handlers│   │   ├── handlers/│   │   │   ├── screenshot.ts     # scroll-stitch screenshot pipeline│   │   │   ├── extraction.ts     # coordinates content script calls│   │   │   └── export.ts         # generates DESIGN.md, tokens.json, prompts│   │   └── services/│   │       └── db.ts             # idb wrapper for IndexedDB (screenshots + history)│   ├── content/│   │   ├── isolated/│   │   │   ├── index.ts          # Main ISOLATED world entry│   │   │   ├── extractor/│   │   │   │   ├── tokens.ts     # CSS variable + computed style extraction│   │   │   │   ├── layout.ts     # [V2] Section/grid/flex structure analysis│   │   │   │   ├── components.ts # [V2] Component detection engine│   │   │   │   └── assets.ts     # SVG/img/icon scanner│   │   │   └── inspector.ts      # Element hover/click inspector│   │   └── main-world/│   │       └── animation.ts      # [V3] MAIN world — reads window globals│   ├── sidepanel/│   │   ├── index.html│   │   ├── main.tsx│   │   ├── store.ts              # Zustand store│   │   └── components/│   │       ├── TokensTab.tsx│   │       ├── ComponentsTab.tsx # [V2]│   │       ├── AssetsTab.tsx│   │       ├── AIPromptTab.tsx   # [V2]│   │       └── HistoryTab.tsx│   └── shared/│       ├── types.ts              # ExtractionResult, DesignToken, etc.│       └── messages.ts           # MessageType enum + typed message factories├── manifest.config.ts            # CRXJS manifest config├── vite.config.ts├── package.json└── tsconfig.json
+4. Manifest V3 Specification
+4.1  manifest.config.ts (CRXJS format)
+{  manifest_version: 3,  name: "StyleSnap",  version: "1.0.0",  minimum_chrome_version: "114",   // Side Panel API availability  description: "Extract any website's design system in one click.",  permissions: [    "activeTab",        // Temporary access on user gesture    "scripting",        // chrome.scripting.executeScript — inject content scripts    "storage",          // chrome.storage.local for history/settings    "sidePanel",        // chrome.sidePanel API    "tabs",             // chrome.tabs.captureVisibleTab for screenshots    "downloads",        // chrome.downloads.download for file export  ],  optional_permissions: [    "unlimitedStorage", // Requested at V2 when screenshot blobs are stored  ],  host_permissions: ["<all_urls>"],  // Required to inject on any page  background: {    service_worker: "src/background/index.ts",    type: "module",  },  side_panel: { default_path: "src/sidepanel/index.html" },  action: { default_title: "Open StyleSnap" },  web_accessible_resources: [{    resources: ["src/content/main-world/animation.js"],  // [V3]    matches: ["<all_urls>"],  }],}
+4.2  Key Permission Rationale
+Permission
+Risk Level (CWS)
+Why Required
+activeTab
+Low — no install warning
+Grants temporary access to current tab on click; prevents broad host_permissions from being mandatory at V1
+scripting
+Low
+Required for chrome.scripting.executeScript to inject content scripts dynamically and to inject MAIN world scripts
+storage
+Low
+chrome.storage.local for extraction history (last 10), user settings (theme, default export format)
+sidePanel
+Low
+Required to use chrome.sidePanel.open() and register side panel path
+tabs
+Medium — "Read your browsing history"
+Required for chrome.tabs.captureVisibleTab(). This is the highest-risk permission and should be disclosed in CWS listing.
+downloads
+Low
+Required for chrome.downloads.download() to save exported files (tokens.json, DESIGN.md, ZIP) to user downloads folder
+unlimitedStorage (optional)
+Low — optional, runtime request
+Needed when screenshot blobs stored in IndexedDB exceed the 5MB chrome.storage.local default. Requested at V2 first launch.
+<all_urls> host_permissions
+High — "Read and change all your data on all websites"
+Required to inject content scripts on any page. Cannot scope narrower without breaking core functionality. Must be prominently disclosed.
+5. Storage Architecture
+5.1  Two-Tier Strategy
+StyleSnap uses two storage tiers depending on data size and type:
+Tier 1 — chrome.storage.local: structured metadata, settings, extraction history references (max ~4.8 MB, well within 5 MB default limit for metadata alone)
+Tier 2 — IndexedDB (via idb v8): binary blobs (screenshots), large extraction payloads (full DOM analysis data), and component code libraries
+5.2  chrome.storage.local Schema
+// Key: "settings"interface Settings {  theme: "light" | "dark" | "system";  defaultExportTarget: "cursor" | "claude" | "v0" | "bolt" | "lovable";  defaultExportFormat: "design-md" | "tokens-json" | "tailwind" | "master-prompt";  inspectorEnabled: boolean;  version: string;  // tracks schema version for migrations}// Key: "history"interface HistoryIndex {  entries: HistoryEntry[];  // max 10, FIFO, newest first}interface HistoryEntry {  id: string;              // UUID v4  url: string;  title: string;  favicon: string;         // data URI  timestamp: number;       // Unix ms  hasScreenshots: boolean; // whether screenshots are stored in IndexedDB  tokenCount: number;  componentCount: number;  // [V2]  idbKey: string;          // references IndexedDB record}
+5.3  IndexedDB Schema (idb v8)
+DB name: "stylesnap-db"  |  Version: 1Object Store: "extractions"  keyPath: "id" (UUID string)  indexes: ["url", "timestamp"]interface ExtractionRecord {  id: string;  url: string;  timestamp: number;  tokens: DesignTokens;        // full extracted token set  layout?: LayoutStructure;    // [V2]  components?: Component[];    // [V2]  animations?: AnimationReport; // [V3]  assets: AssetManifest;}Object Store: "screenshots"  keyPath: "id" (matches extraction id)interface ScreenshotRecord {  // [V2]  id: string;  fullPage: Blob;              // full-page stitched PNG  sections: SectionShot[];    // per-section screenshots}interface SectionShot {  label: string;  // "hero", "nav", "features", etc.  blob: Blob;}
+5.4  Service Worker Ephemeral State Warning
+MV3 service workers are event-driven and terminate when idle (typically 30 seconds after last event). No in-memory state can be assumed to persist between events. All intermediate state during multi-step operations (scroll-stitch screenshot, full DOM walk) must either:
+Be held in the content script's memory (which persists as long as the tab is open), OR
+Be committed to IndexedDB before the service worker could be terminated
+The screenshot pipeline keeps scroll-position state in the content script and sends completed tile blobs directly to the side panel via port messaging to avoid service worker memory constraints.
+6. Message Passing Protocol
+6.1  Message Type Registry
+MessageType
+Direction
+Payload / Purpose
+EXTRACT_PAGE
+Panel → SW → CS
+Trigger full-page extraction; payload: { url, options }
+EXTRACTION_PROGRESS
+CS → SW → Panel
+Progress update; payload: { step: string, pct: number }
+EXTRACTION_COMPLETE
+CS → SW → Panel
+Full result; payload: ExtractionResult (see §7)
+INSPECT_ACTIVATE
+Panel → CS
+Enable element inspector hover mode
+INSPECT_DEACTIVATE
+Panel → CS
+Disable inspector
+ELEMENT_SELECTED
+CS → Panel
+User clicked element; payload: { html, css, boundingBox }
+CAPTURE_SCREENSHOT
+CS → SW
+Request viewport capture; SW calls captureVisibleTab
+SCREENSHOT_TILE
+SW → CS/Panel
+[V2] One tile of scroll-stitch; payload: { dataUrl, y, index, total }
+DETECT_ANIMATIONS
+CS (ISOLATED) → SW
+[V3] Trigger MAIN world injection for animation detection
+ANIMATION_RESULT
+MAIN → ISOLATED → SW → Panel
+[V3] Detected animation libraries and descriptions
+EXPORT_FILE
+Panel → SW
+Generate and download file; payload: { format, tool?, extractionId }
+HISTORY_GET
+Panel → SW
+Fetch extraction history from chrome.storage.local
+HISTORY_RESULT
+SW → Panel
+Payload: HistoryIndex
+6.2  Port-Based Connection (Long Operations)
+For scroll-stitch screenshot and full DOM walk, a persistent port is used to keep the service worker awake and stream progress:
+// Content script opens portconst port = chrome.runtime.connect({ name: "stylesnap-extraction" });// Send progress messages over port (keeps SW alive)port.postMessage({ type: "EXTRACTION_PROGRESS", pct: 25, step: "Scanning CSS" });// SW listens on portchrome.runtime.onConnect.addListener((port) => {  if (port.name === "stylesnap-extraction") {    port.onMessage.addListener(handlePortMessage);    port.onDisconnect.addListener(handlePortClose);  }});
+7. Token Extraction Engine  [V1]
+The extraction engine runs in the ISOLATED world content script. It executes in three phases to maximise accuracy across all CSS authoring strategies (vanilla CSS, CSS variables, Tailwind utility classes, CSS-in-JS).
+7.1  Phase 1 — Stylesheet Scan (Declared Styles)
+Iterates document.styleSheets to extract explicitly declared CSS custom properties (variables) and @media breakpoints. This is the highest-fidelity source for intentional design tokens.
+function scanStylesheets() {  const vars: Record<string, string> = {};  const breakpoints: number[] = [];  for (const sheet of document.styleSheets) {    let rules: CSSRuleList;    try {      rules = sheet.cssRules;  // throws SecurityError for cross-origin sheets    } catch { continue; }    for (const rule of rules) {      // Extract CSS custom properties from :root and * selectors      if (rule instanceof CSSStyleRule) {        if (rule.selectorText === ":root" || rule.selectorText === "*") {          const style = rule.style;          for (let i = 0; i < style.length; i++) {            const prop = style[i];            if (prop.startsWith("--")) {              vars[prop] = style.getPropertyValue(prop).trim();            }          }        }      }      // Extract breakpoints from @media rules      if (rule instanceof CSSMediaRule) {        const match = rule.conditionText.match(/\d+px/g);        if (match) breakpoints.push(...match.map(v => parseInt(v)));      }    }  }  return { vars, breakpoints: [...new Set(breakpoints)].sort((a,b) => a-b) };}
+7.2  Phase 2 — DOM Walk (Computed Styles)
+Walks every visible DOM element and calls getComputedStyle() to collect actual rendered values. This works regardless of whether the site uses CSS variables, Tailwind utility classes, or CSS-in-JS — because computed styles represent the final resolved values the browser uses to paint the page.
+const SAMPLE_LIMIT = 2000;  // Performance: sample up to 2000 elementsfunction walkDOM() {  const colors = new Map<string, number>();   // value → frequency count  const fonts = new Map<string, FontEntry>();  const spacings = new Map<number, number>(); // px value → frequency  const radii = new Set<string>();  const shadows = new Set<string>();  const elements = Array.from(document.querySelectorAll("*"))    .filter(el => isVisible(el))    .slice(0, SAMPLE_LIMIT);  for (const el of elements) {    const cs = getComputedStyle(el);    // Colors — 5 sources per element    for (const prop of ["color","backgroundColor","borderColor","outlineColor","fill"]) {      const val = cs.getPropertyValue(prop);      if (val && val !== "rgba(0, 0, 0, 0)" && val !== "transparent") {        colors.set(normalizeColor(val), (colors.get(normalizeColor(val)) || 0) + 1);      }    }    // Typography    const ff = cs.fontFamily.split(",")[0].trim().replace(/["]/g, "");    const fs = parseFloat(cs.fontSize);    const fw = cs.fontWeight;    const lh = cs.lineHeight;    fonts.set(`${ff}-${fs}-${fw}`, { family: ff, size: fs, weight: fw, lineHeight: lh, count: ... });    // Spacing (padding/margin — extract numeric values)    for (const prop of ["paddingTop","paddingRight","paddingBottom","paddingLeft",                         "marginTop","marginRight","marginBottom","marginLeft"]) {      const v = parseFloat(cs[prop]);      if (v > 0) spacings.set(v, (spacings.get(v) || 0) + 1);    }    // Border radius & shadows    const br = cs.borderRadius;    if (br && br !== "0px") radii.add(br);    const bs = cs.boxShadow;    if (bs && bs !== "none") shadows.add(bs);  }  return { colors, fonts, spacings, radii, shadows };}
+7.3  Phase 3 — Deduplication & Normalization
+Raw computed values contain hundreds of near-duplicates (e.g., rgba(79, 70, 229, 1) and #4F46E5 are the same color). Phase 3 normalizes, deduplicates, and ranks by frequency to produce a clean token set.
+Colors: normalize all to HSL for deduplication; cluster colors within ±5° hue + ±10% saturation + ±10% lightness as "same"; classify into semantic groups (primary, secondary, accent, neutral, semantic/status) by hue and usage context (text vs background)
+Typography: deduplicate by family+size+weight; identify type scale by sorting by size and labeling h1–h6 + body + caption + micro
+Spacing: identify the geometric progression (if values follow 4px grid: 4, 8, 12, 16, 24, 32, 48, 64); normalize to the base unit; flag non-grid values as "anomalous"
+Shadows: deduplicate exact matches; categorize into elevation levels (none, sm, md, lg, xl) by blur-radius magnitude
+Border radii: deduplicate; classify as none/sm/md/lg/full by px value
+7.4  CSS Framework Detection & Fallback Strategy
+Framework Type
+Detection Signal
+StyleSnap Strategy
+Vanilla CSS / CSS Variables
+CSS custom properties on :root
+Phase 1 (highest fidelity) — extract directly from cssRules
+Tailwind CSS (utility classes)
+className contains "bg-", "text-", "p-", "m-", "rounded-" etc.
+Phase 2 only — utility classes don't produce CSS vars; computed styles are ground truth
+Tailwind v4 (CSS-first)
+@theme block in stylesheet; --tw-* variables
+Phase 1 catches --tw-* vars; Phase 2 confirms computed values
+styled-components
+<style data-styled> tag in DOM; sc- class prefix
+Phase 2 only — styles are injected at runtime, cssRules access works but stylesheet is dynamic
+Emotion
+<style data-emotion> tag; css-XXXXX class names
+Phase 2 only — same as styled-components
+Cross-origin stylesheets
+SecurityError on cssRules access
+Skip Phase 1 for that sheet; Phase 2 still captures computed values from those styles
+7.5  Output: DesignTokens Type
+interface DesignTokens {  colors: ColorToken[];  typography: TypographyScale;  spacing: SpacingScale;  shadows: ShadowToken[];  borderRadius: RadiusToken[];  breakpoints: number[];  cssVariables: Record<string, string>;  // raw CSS custom properties  detectedFramework: "vanilla" | "tailwind" | "css-in-js" | "unknown";  confidence: number;  // 0–1, based on token coverage and consistency}interface ColorToken {  value: string;           // hex normalized  hsl: string;  frequency: number;       // DOM occurrence count  contexts: string[];      // ["background","text","border"]  semanticGroup: string;   // "primary","neutral","accent","semantic"  name?: string;           // if sourced from a CSS variable: "--color-primary"}
+8. Element Inspector  [V1]
+The element inspector is activated from the side panel. When active, the content script attaches event listeners to the page to enable hover-highlight and click-to-select behaviour.
+8.1  Implementation
+// Overlay element injected into the page for the bounding box highlightconst overlay = document.createElement("div");overlay.style.cssText = `  position:fixed; pointer-events:none; z-index:2147483647;  border:2px solid #4F46E5; background:rgba(79,70,229,0.1);  transition: all 0.1s ease;`;document.body.appendChild(overlay);// Mouseover: position overlay on hovered elementdocument.addEventListener("mouseover", (e) => {  const rect = e.target.getBoundingClientRect();  overlay.style.top = rect.top + "px";  overlay.style.left = rect.left + "px";  overlay.style.width = rect.width + "px";  overlay.style.height = rect.height + "px";}, true);// Click: capture element, send to panel, deactivate inspectordocument.addEventListener("click", (e) => {  e.preventDefault(); e.stopPropagation();  const el = e.target as HTMLElement;  const cs = getComputedStyle(el);  const cssProps = extractRelevantCSS(cs);  chrome.runtime.sendMessage({    type: "ELEMENT_SELECTED",    payload: {      tagName: el.tagName.toLowerCase(),      html: el.outerHTML.slice(0, 2000),  // truncate for safety      css: cssProps,      boundingBox: el.getBoundingClientRect(),    }  });  deactivateInspector();}, true);
+8.2  CSS Property Extraction
+extractRelevantCSS() returns only non-default, non-inherited values to avoid flooding the output. It compares computed style against a baseline empty element's styles and returns only properties that differ.
+9. Asset Finder  [V1]
+9.1  Detection Sources
+Asset Type
+DOM Query
+Notes
+<img> elements
+document.querySelectorAll("img")
+Extract src, srcset, naturalWidth, naturalHeight, alt
+Inline <svg>
+document.querySelectorAll("svg")
+Serialize via XMLSerializer.serializeToString()
+External SVG (img src)
+img[src$=".svg"]
+Fetch via content script for inline display
+CSS background-image
+getComputedStyle(el).backgroundImage
+Extract URL from url(...); skip data URIs > 100KB
+Favicon
+link[rel~="icon"]
+Always included in output
+<picture> sources
+picture > source[srcset]
+Include all srcset variants
+9.2  Export
+Individual assets: copy URL or copy data URI to clipboard. Bulk: all assets collected into a JSZip archive. Each asset named by its type and a sequential index (e.g., icon-001.svg, image-003.png). ZIP generated in the side panel context and downloaded via chrome.downloads API from service worker.
+10. Screenshot Pipeline  [V2]
+chrome.tabs.captureVisibleTab() only captures the visible viewport. Full-page screenshots require a scroll-and-stitch approach: the content script controls the page scroll, and the service worker captures each viewport tile.
+10.1  Scroll-and-Stitch Algorithm
+// In content script (ISOLATED world):async function captureFullPage() {  const pageHeight = document.documentElement.scrollHeight;  const viewportHeight = window.innerHeight;  const totalTiles = Math.ceil(pageHeight / viewportHeight);  const tiles: string[] = [];  // Disable smooth scroll for clean stitching  document.documentElement.style.scrollBehavior = "auto";  // Hide sticky headers (they re-appear on every tile otherwise)  const stickyEls = findStickyElements();  stickyEls.forEach(el => el.style.display = "none");  for (let i = 0; i < totalTiles; i++) {    window.scrollTo(0, i * viewportHeight);    await sleep(150);  // allow paint to settle    // Request service worker to capture the current viewport    const dataUrl = await chrome.runtime.sendMessage({ type: "CAPTURE_SCREENSHOT" });    tiles.push(dataUrl);  }  // Restore page state  stickyEls.forEach(el => el.style.display = "");  window.scrollTo(0, 0);  document.documentElement.style.scrollBehavior = "";  // Stitch in side panel using OffscreenCanvas  chrome.runtime.sendMessage({ type: "STITCH_TILES", payload: { tiles, pageHeight, viewportHeight } });}
+10.2  Stitching (Side Panel)
+// In side panel (extension page with full canvas access):async function stitchTiles(tiles: string[], pageH: number, viewH: number) {  const canvas = document.createElement("canvas");  const img0 = await loadImage(tiles[0]);  canvas.width = img0.naturalWidth;  canvas.height = pageH * (img0.naturalWidth / window.screen.width);  const ctx = canvas.getContext("2d")!;  for (let i = 0; i < tiles.length; i++) {    const img = await loadImage(tiles[i]);    ctx.drawImage(img, 0, i * img.naturalHeight);  }  canvas.toBlob((blob) => {    // Store blob in IndexedDB via service worker message    chrome.runtime.sendMessage({ type: "STORE_SCREENSHOT", payload: blob });  }, "image/png");}
+10.3  Known Edge Cases
+Infinite scroll / lazy-loading: scroll-and-stitch stops when scrollHeight stops increasing after each scroll step (max 50 tiles to prevent infinite loop)
+Parallax sections: sticky elements are hidden during capture to prevent double-rendering artifacts
+Full-viewport 3D/WebGL: canvas elements are captured as static frames (the live WebGL state is not reconstructed)
+iframes: cross-origin iframes render as blank regions (browser security restriction)
+11. Component Detection Engine  [V2]
+Component detection identifies recurring UI patterns in the DOM and extracts their HTML structure and computed CSS as reusable code snippets. This is the most technically complex feature in StyleSnap and the primary portfolio differentiator.
+11.1  Four-Signal Detection Model
+Each candidate element is scored by four independent signals. The sum determines overall confidence.
+Signal
+Max Score
+Detection Method
+Examples
+Semantic HTML
+0.35
+Check element.tagName against semantic set
+<button>, <nav>, <input>, <form>, <header>, <footer>, <dialog>
+ARIA Roles
+0.25
+Check role= attribute
+role="button", role="navigation", role="dialog", role="banner"
+Repeated Structure
+0.25
+Find siblings with identical tagName tree depth + class count; ≥3 matches = pattern
+Product cards, list items, team member cards, testimonials
+Class Name Heuristic
+0.15
+class contains known component keywords
+"btn", "card", "badge", "modal", "chip", "tag", "hero", "avatar"
+11.2  Confidence Threshold
+An element is classified as a component only if its cumulative signal score ≥ 0.60. Elements scoring 0.45–0.59 are flagged as "uncertain" and shown with a warning indicator in the UI. Elements below 0.45 are discarded.
+11.3  Repeated Structure Detection Algorithm
+function getStructureSignature(el: Element): string {  // Generate a compact "fingerprint" of the element's inner structure  // using tag names and child counts only (not classes/IDs — those vary per instance)  const tag = el.tagName.toLowerCase();  const childSigs = Array.from(el.children)    .map(child => getStructureSignature(child))    .join(",");  return childSigs ? `${tag}(${childSigs})` : tag;}function findRepeatedComponents(): ComponentPattern[] {  const sigMap = new Map<string, Element[]>();  for (const el of document.querySelectorAll("*")) {    if (el.children.length < 2) continue;  // ignore leaf nodes    const sig = getStructureSignature(el);    const existing = sigMap.get(sig) || [];    existing.push(el);    sigMap.set(sig, existing);  }  // Pattern = signature appearing 3+ times  return [...sigMap.entries()]    .filter(([_, els]) => els.length >= 3)    .map(([sig, els]) => ({ signature: sig, instances: els, count: els.length }));}
+11.4  Component Code Extraction
+For each detected component, StyleSnap outputs:
+HTML snippet: el.outerHTML of the first clean instance (long text truncated to 80 chars, src attributes normalized to placeholder)
+CSS block: all non-default computed styles of the element and its children, formatted as a scoped CSS rule set
+Component label: derived from ARIA role > semantic tag > class keyword match (in priority order)
+Instance count: how many times this pattern appears on the page
+12. AI Prompt Generation Engine  [V2]
+The prompt engine converts the structured ExtractionResult into a plain-text master prompt optimized for a specific AI coding tool's conventions and context-window expectations.
+12.1  Tool-Specific Prompt Templates
+Tool
+Format Preference
+Key Differences
+Cursor
+Markdown + code blocks
+Expects a DESIGN.md-style doc; responds well to "Apply this design system to..." framing; include Tailwind config
+Claude Code
+Structured sections
+Benefits from SKILL.md format; label sections with ## headings; include CSS variables block as ground truth
+v0 (Vercel)
+Component-first
+Wants explicit component descriptions first; add shadcn/ui component suggestions based on detected components
+Bolt.new
+Full-stack context
+Include page structure sections; Bolt responds to "Build a site with this layout..." followed by tokens
+Lovable
+Conversational + visual
+Shorter prompts work better; lead with the visual goal, then append the design system inline
+12.2  Prompt Structure (Cursor Example)
+# DESIGN SYSTEM: {pageTitle}# Source: {url} | Extracted: {date}## Color Palette```css--color-primary: {primaryColor};--color-secondary: {secondaryColor};{...all tokens as CSS vars}```## Typography Scale{fontFamily} — {sizeScale}## Spacing SystemBase: {baseUnit}px | Scale: {spacingArray}## Components Detected{componentList with descriptions}## Tailwind Config```js{generatedTailwindConfig}```## InstructionsApply this design system precisely when building UI. Use the color tokens as CSScustom properties. Match the typography scale exactly.
+13. Animation & Scroll Detection Engine  [V3]
+13.1  MAIN World Injection
+Because animation library state lives in the page's JavaScript globals (window.gsap, window.ScrollTrigger, etc.), detection requires executing in the MAIN world. The ISOLATED content script cannot access these globals.
+// In ISOLATED content script:chrome.scripting.executeScript({  target: { tabId },  files: ["src/content/main-world/animation.js"],  world: "MAIN",   // key flag — runs in page's JS context});// Results posted back via window.postMessage (only cross-world channel available):window.postMessage({ source: "stylesnap-main", type: "ANIMATION_RESULT", payload: {...} }, "*");// ISOLATED world listens:window.addEventListener("message", (e) => {  if (e.data?.source === "stylesnap-main") {    chrome.runtime.sendMessage({ type: "ANIMATION_RESULT", payload: e.data.payload });  }});
+13.2  Library Detection Matrix
+Library
+JS Global Signal
+DOM Signal
+Config Extractable
+GSAP + ScrollTrigger
+window.gsap, window.ScrollTrigger
+None
+ScrollTrigger.getAll() → trigger configs (start, end, scrub, pin, toggleClass)
+GSAP (no ScrollTrigger)
+window.gsap.version
+None
+gsap.globalTimeline — active tweens
+Framer Motion / Motion
+window.__framer_importedPackages (older), window.motion
+data-framer-* attributes
+Version only — individual variants not accessible without React internals
+AOS
+window.AOS.version
+data-aos, data-aos-duration, data-aos-easing, data-aos-offset
+Full config from DOM data attributes (highest fidelity)
+Lenis
+window.lenis (instance)
+data-lenis-prevent
+lenis.options: duration, easing fn name, smoothWheel
+Locomotive Scroll
+window.LocomotiveScroll
+data-scroll, data-scroll-speed, data-scroll-container
+Full config from DOM data attributes
+ScrollMagic
+window.ScrollMagic
+None
+window.ScrollMagic.Controller — attached scenes list (limited)
+Three.js / WebGL
+window.THREE
+<canvas> with webgl context
+THREE.REVISION — presence + renderer stats only (not full scene)
+13.3  Accuracy Tiers
+Tier
+Libraries
+Accuracy
+Output Quality
+Tier 1
+GSAP/ScrollTrigger, AOS, Lenis, Locomotive Scroll
+High (≥90%)
+Library name + version + full config parameters extracted directly
+Tier 2
+Framer Motion/Motion, ScrollMagic
+Medium (60–80%)
+Library name + version; limited config (no individual animation parameters)
+Tier 3
+Three.js/WebGL, custom vanilla JS scroll
+Low (detection only)
+Presence confirmed; renderer stats for Three.js; no config extraction possible
+13.4  Output Format
+Animation detection always produces a written description in the output, never code reconstruction. Example output for a GSAP site:
+Animations Detected:━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[Tier 1 — High Accuracy] GSAP 3.12.5 + ScrollTrigger 3.12.5Active ScrollTrigger Instances:  • #hero section — pin: true, scrub: 1.2, start: "top top",    end: "+=800", ease: "power2.out"  • .feature-card (×4) — toggleClass: "visible", start: "top 80%",    markers: false, once: true  • .stats-counter — scrub: true, start: "top center", end: "bottom center"[Tier 1 — High Accuracy] Lenis 1.1.1  • duration: 1.2, easing: "exponential", smoothWheel: trueRecommended replication stack: GSAP + ScrollTrigger + Lenis
+14. Export Format Specifications
+14.1  tokens.json  (W3C DTCG 2025.10)
+Conforms to the Design Tokens Specification 2025.10 (first stable version, published October 2025). Supported by Figma, Style Dictionary, Penpot, Tokens Studio, and Terrazzo.
+{  "$metadata": {    "source": "https://example.com",    "extractedBy": "StyleSnap v1.0",    "extractedAt": "2026-07-01T12:00:00Z",    "dtcgVersion": "2025.10"  },  "color": {    "primary": { "$value": "#4F46E5", "$type": "color", "$description": "Primary brand color (freq: 847)" },    "neutral": {      "100": { "$value": "#F9FAFB", "$type": "color" },      "900": { "$value": "#111827", "$type": "color" }    }  },  "typography": {    "fontFamily": { "sans": { "$value": "Inter, system-ui, sans-serif", "$type": "fontFamily" } },    "fontSize": {      "h1": { "$value": "3rem", "$type": "dimension" },      "body": { "$value": "1rem", "$type": "dimension" }    }  },  "spacing": {    "1": { "$value": "4px", "$type": "dimension" },    "4": { "$value": "16px", "$type": "dimension" },    "16": { "$value": "64px", "$type": "dimension" }  },  "borderRadius": {    "sm": { "$value": "4px", "$type": "dimension" },    "full": { "$value": "9999px", "$type": "dimension" }  }}
+14.2  DESIGN.md Structure
+AI-readable markdown file structured for maximum utility when pasted into AI coding tool context. Mirrors the SKILL.md format popularized by DESIGN.md / TypeUI.
+# DESIGN SYSTEM — {page title}> Source: {url} | Extracted by StyleSnap v{version} | {date}## Colors| Token | Hex | HSL | Usage ||-------|-----|-----|-------|| --color-primary | #4F46E5 | hsl(243,75%,59%) | buttons, links, CTA |## CSS Variables (paste into :root)```css:root {  --color-primary: #4F46E5;}```## TypographyPrimary font: Inter | Scale: 12/14/16/20/24/32/48/64px| Role | Size | Weight | Line Height |## Spacing ScaleBase: 4px | Scale: 4, 8, 12, 16, 24, 32, 48, 64, 96, 128## Components [V2](extracted component library)## Animations [V3](detected animation libraries and configurations)
+14.3  tailwind.config.js
+Drop-in Tailwind v3 configuration extending the default theme with extracted tokens. Compatible with Tailwind v3.x (JIT mode). A separate tailwind.config.v4.css output will be added at V2 for Tailwind v4 CSS-first format.
+// tailwind.config.js — generated by StyleSnapmodule.exports = {  content: ["./src/**/*.{html,js,jsx,ts,tsx}"],  theme: {    extend: {      colors: {        primary: "#4F46E5",        "primary-light": "#818CF8",        neutral: { 100: "#F9FAFB", 900: "#111827" },      },      fontFamily: {        sans: ["Inter", "system-ui", "sans-serif"],      },      fontSize: {        h1: ["3rem", { lineHeight: "1.2" }],        body: ["1rem", { lineHeight: "1.6" }],      },      spacing: {        "18": "4.5rem",        "22": "5.5rem",      },      borderRadius: {        card: "12px",        badge: "999px",      },    },  },  plugins: [],};
+15. Layout Structure Extraction  [V2]
+15.1  Section Detection
+The layout extractor identifies top-level page sections by scanning the DOM for major structural landmarks, then describes their grid/flex structure.
+Detection order: semantic HTML5 landmarks first (<header>, <nav>, <main>, <footer>, <section>, <aside>), then large non-semantic divs with full-width layout (width > 80% viewport, height > 200px)
+Each section is labelled by heuristic: <header> + first child nav → "Navigation"; large hero-height section with heading + button → "Hero"; grid of 3+ similar children → "Feature Grid"; etc.
+Grid/flex analysis: read display, grid-template-columns, flex-direction, gap, align-items, justify-content from computed style of the section and its direct children
+15.2  Output: LayoutStructure Type
+interface LayoutStructure {  sections: PageSection[];  maxWidth: string;       // max content width detected  baseGrid: string;       // e.g., "12-column, 24px gap"}interface PageSection {  label: string;          // "Hero", "Navigation", "Feature Grid", "CTA", "Footer"  tagName: string;  layoutType: "flex" | "grid" | "block" | "absolute";  gridCols?: string;      // e.g., "repeat(3, 1fr)"  flexDirection?: string;  gap?: string;  padding?: string;  backgroundColor?: string;  screenshotLabel?: string;  // references section screenshot in ZIP}
+16. Error Handling Matrix
+Error Scenario
+Trigger
+Severity
+Handling
+cross-origin SecurityError on cssRules
+Phase 1 stylesheet scan
+Low
+Catch + skip that sheet; continue with others; log to extraction warnings[]
+No elements visible (blank page / SPA pre-render)
+Phase 2 DOM walk
+High
+Abort extraction; show "Page may still be loading — try again" in panel
+captureVisibleTab fails (restricted page: chrome://, CWS)
+Screenshot pipeline
+Medium
+Show in-panel error: "Screenshots not available on this page type"
+MAIN world injection fails (strict CSP)
+Animation detection (V3)
+Medium
+Fall back to DOM-attribute-only detection; label as Tier 3; notify user in panel
+getComputedStyle returns empty / 0 values
+Phase 2 DOM walk
+Low
+Skip element; sufficient coverage from other elements
+IndexedDB quota exceeded
+Screenshot storage
+High
+Prompt user to request unlimitedStorage permission; offer to skip screenshot storage
+Port disconnects mid-extraction
+Long extraction operations
+High
+Detect in port.onDisconnect; show "Extraction interrupted — reconnect" message; allow resume from last checkpoint saved to chrome.storage.session
+Service worker terminated mid-operation
+Any SW operation > 30s
+High
+Use port connection to keep SW alive; save checkpoints to chrome.storage.session every 5s
+Component detection produces all false positives
+Component engine
+Medium
+Confidence score visible in UI; user can dismiss individual components; minimum threshold of 0.60 enforced
+17. Performance Requirements
+Operation
+Target Time
+Strategy
+Token extraction (V1)
+< 3 seconds on typical page
+2000-element DOM walk limit; early exit when confidence plateau reached
+Element inspector activation
+< 100ms
+Overlay element pre-injected at content script load time
+Side panel initial render
+< 200ms
+React 18 concurrent mode; skeleton loading states; no blocking data fetches
+Full-page screenshot (V2)
+< 15 seconds for typical page
+150ms settle delay per tile; 50-tile maximum; progress bar in panel
+Component detection (V2)
+< 5 seconds
+Structure signature generation is O(n); limit to 1500 elements
+Export file generation
+< 1 second
+All generation in service worker; no UI blocking
+Animation detection (V3)
+< 500ms
+MAIN world read of globals is synchronous; DOM attribute scan is O(n)
+18. Security Considerations
+18.1  MAIN World Risk
+Code executing in the MAIN world shares the page's JavaScript context and can be interfered with by the page's own scripts or other extensions. Mitigations:
+MAIN world script reads globals immediately after injection and posts results back via window.postMessage within the same microtask queue — minimizing the window for interception
+All postMessage communications include a source: "stylesnap-main" sentinel; the ISOLATED listener validates this before forwarding
+No sensitive data (user credentials, private page content) is ever read or transmitted — only library globals and computed style values
+18.2  Content Security Policy (CSP)
+Sites with strict CSP may block MAIN world script injection. Specifically, if the page's CSP includes script-src 'self' without 'unsafe-inline' and without the extension origin, dynamic injection can be blocked. StyleSnap registers the MAIN world script as a web_accessible_resource which gives it the extension's own origin, bypassing most page CSP restrictions. However, some enterprise-grade sites with strict CSP header policies may still block injection — in this case, animation detection gracefully falls back to Tier 3 (DOM attribute scan only).
+18.3  Data Privacy
+All extraction, storage, and export happens client-side — no data is ever sent to any external server
+The tabs permission (required for captureVisibleTab) is the highest-risk permission; this must be explicitly disclosed in the Chrome Web Store listing description and privacy policy
+No analytics, telemetry, or usage tracking of any kind at V1–V3
+Extraction history stored in chrome.storage.local is user-local and is cleared when the user uses the "Clear History" button or uninstalls the extension
+19. Build Configuration
+19.1  vite.config.ts
+import { defineConfig } from "vite";import react from "@vitejs/plugin-react";import { crx } from "@crxjs/vite-plugin";import manifest from "./manifest.config";export default defineConfig({  plugins: [react(), crx({ manifest })],  build: {    rollupOptions: {      input: {        sidepanel: "src/sidepanel/index.html",      },    },  },});
+19.2  Key Build Notes
+CRXJS v2.6.1 supports Vite 6–8 — use Vite 6 for stability; do not upgrade to Vite 7/8 without testing CRXJS compatibility first
+Content scripts with world: "MAIN" cannot use CRXJS HMR — they are bundled as static files and listed in web_accessible_resources
+Service worker must be type: "module" in manifest; CRXJS handles the ESM bundling correctly
+Tailwind CSS must be configured with the side panel HTML as a content source; content scripts use a separate minimal Tailwind config if they need any styles (the inspector overlay uses inline styles only)
+Source maps enabled in development; disabled in production build
+19.3  Development Workflow
+pnpm dev        # Vite dev server with HMR for side panel; CRXJS hot-reloads extensionpnpm build      # Production build → dist/ folderpnpm zip        # ZIPs dist/ for Chrome Web Store upload                # Load dist/ as unpacked extension in Chrome for testing
+20. Testing Strategy
+20.1  Test Suite Overview
+Test Type
+Tool
+What it covers
+Unit tests (extraction logic)
+Vitest
+Token deduplication, color normalization, structure signature hashing, confidence scoring, export format generators
+Component tests (side panel UI)
+Vitest + React Testing Library
+Tab switching, export button states, history list rendering, empty states
+Integration tests (message protocol)
+Vitest with mocked chrome.*
+Message routing between content script, service worker, and panel; port lifecycle
+E2E tests (10 reference sites)
+Playwright + chrome-extension testing
+Accuracy audit: run extraction on 10 known sites; compare output to manually verified ground truth; target ≥95% token accuracy
+Animation detection tests
+Playwright (V3)
+Run against 5 known GSAP sites, 3 AOS sites, 2 Lenis sites; verify detection recall ≥90%
+20.2  Reference Test Site Categories
+Plain CSS with CSS variables: Linear.app, Stripe.com, Vercel.com
+Tailwind-heavy sites: Tailwindcss.com, Railway.app, Resend.com
+CSS-in-JS: Chakra UI docs, Emotion docs
+GSAP + ScrollTrigger heavy (V3): awwwards.com nominees, threekit.com
+AOS/Lenis sites: typical marketing sites built with common templates
+21. Open Technical Decisions
+The following decisions are not yet finalized and should be resolved before V2 implementation begins:
+Decision
+Options
+Recommendation
+Color clustering tolerance (Phase 3)
+±5°/10%/10% vs ±10°/15%/15%
+Start with ±5° and validate against reference sites; loosen if too many false splits
+Component DOM sample limit
+1000, 1500, or 2000 elements
+1500 — good balance of performance and coverage; configurable in settings at V2
+Offscreen canvas vs side panel canvas for stitching
+OffscreenCanvas in SW vs canvas in side panel page
+Side panel canvas — OffscreenCanvas in SW is not yet reliable in MV3 due to SW lifetime concerns
+Tailwind v4 CSS-first config output format
+CSS @theme block vs JS config
+Ship both at V2; detect Tailwind v4 by presence of @theme in stylesheets and output appropriate format
+22. Document History
+Version
+Date
+Author
+Changes
+v1.0
+July 2026
+Guru (Soham Belwadkar)
+Initial TRD — all 22 sections; covers V1, V2, V3 technical architecture

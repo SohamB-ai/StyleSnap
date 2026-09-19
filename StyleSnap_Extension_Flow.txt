@@ -1,0 +1,1316 @@
+StyleSnap
+Chrome Extension
+Extension Flow Document  ·  v1.0
+Author  Guru (Soham Belwadkar)
+Status  Draft v1.0
+Date  July 2026
+Companion to  StyleSnap PRD v1.0  +  TRD v1.0
+Product  Omenova Studio
+1. How to Read This Document
+This document defines every user-facing and system-level flow in StyleSnap — how data moves between the four execution contexts, what triggers each operation, what the happy path looks like step by step, and what happens when things go wrong.
+Each flow follows a consistent structure:
+Trigger — what initiates the flow (user action, system event, or message)
+Pre-conditions — what must be true before the flow can start
+Flow table — step-by-step with actor, action, data in, and data out
+Decision points — forks in the flow with conditions
+Error paths — what happens if the step fails
+End state — what the extension looks like after the flow completes
+1.1  Actor Legend
+Every step row is colour-coded by actor:
+USER
+PANEL
+CS
+SW
+ERROR
+SYSTEM
+Side Panel UI  |  Content Script (ISOLATED)  |  Service Worker  |  Chrome / OS
+Actor
+Refers to
+USER
+The developer using the extension in their Chrome browser
+PANEL
+The StyleSnap React side panel UI (chrome.sidePanel — runs as an extension page)
+CS
+Content script running in ISOLATED world — injected into the active page
+SW
+Service worker (background.js) — coordinates all operations, handles chrome.* API calls
+ERROR
+An error/failure state — shows recovery path
+SYSTEM
+Chrome browser / operating system — events from outside the extension codebase
+1.2  Version Tags
+Flows are tagged [V1], [V2], or [V3] matching the PRD versioning. V1 flows are fully specced; V2/V3 flows include all decision points and error paths but some implementation details are deferred to their respective milestones.
+2. Extension State Machine
+The extension's side panel UI can be in one of six global states at any time. All flows are transitions between these states.
+State
+Description
+Valid Transitions
+IDLE
+Panel open, no extraction in progress. Showing last extraction or empty state.
+→ EXTRACTING (user clicks Extract) | → INSPECTING (user activates inspector)
+EXTRACTING
+Full-page extraction running. Progress bar shown. Panel is non-interactive for core tabs.
+→ IDLE (extraction complete) | → ERROR (extraction failed)
+INSPECTING
+Element inspector active on the page. Overlay visible. User hovering elements.
+→ ELEMENT_SELECTED (user clicks element) | → IDLE (user presses Escape)
+ELEMENT_SELECTED
+Inspector result shown in panel. CSS/HTML of selected element displayed.
+→ INSPECTING (user clicks Inspect Again) | → IDLE (user clicks Done)
+EXPORTING
+File export in progress (generating ZIP, tokens.json, etc.). Brief state — typically < 1s.
+→ IDLE (export complete) | → ERROR (export failed)
+ERROR
+An operation failed. Error message shown with recovery options.
+→ IDLE (user dismisses / retries) | → EXTRACTING (user retries extraction)
+State Transition Diagram:               ┌─────────────────────────────────────────────────┐               │                    IDLE                         │               └──────┬──────────────────────┬───────────────────┘                      │ [Extract clicked]     │ [Inspector clicked]                      ▼                       ▼               ┌────────────┐         ┌─────────────────┐               │ EXTRACTING │         │   INSPECTING    │               └──────┬─────┘         └────────┬────────┘            ┌─────────┴─────────┐              │ [element clicked]            │                   │              ▼         [success]           [failure]  ┌──────────────────┐            │                   │       │ ELEMENT_SELECTED  │            ▼                   ▼       └──────────────────┘          IDLE               ERROR                               │                         [user retries]                               │                               ▼                          EXTRACTING
+3. Flow 1 — Install & First Launch  [V1]
+Trigger: User installs StyleSnap from the Chrome Web Store for the first time.
+Pre-conditions: Chrome 114+. Extension not previously installed.
+End state: Side panel open, IDLE state, default settings written to storage.
+#
+Actor
+Action
+Data In
+Data Out
+1
+SYSTEM
+Chrome Web Store installs the extension. Service worker registers.
+CWS install event
+SW registered
+2
+SW
+chrome.runtime.onInstalled fires with reason: "install". SW initialises default settings in chrome.storage.local.
+reason: "install"
+{ settings: defaults, history: [] }
+3
+SW
+chrome.sidePanel.setOptions() registers side panel path. Opens side panel automatically on first install.
+default_path
+Side panel registered
+4
+PANEL
+Side panel React app mounts. Reads settings from chrome.storage.local. Detects history is empty.
+chrome.storage.local
+Zustand store hydrated
+5
+PANEL
+Renders onboarding / empty state: "Visit any website and click Extract to get started." No previous extraction shown.
+Empty history
+IDLE state rendered
+6
+USER
+Sees the side panel for the first time. Extension is ready to use.
+—
+Flow complete
+On subsequent launches (extension already installed), steps 2–3 are skipped. SW fires chrome.runtime.onStartup instead and the panel reads the last extraction from IndexedDB if available.
+4. Flow 2 — Open Side Panel  [V1]
+Trigger: User clicks the StyleSnap toolbar icon on any webpage.
+Pre-conditions: Extension installed. User is on a page that allows content script injection (not chrome://, not chrome web store pages).
+End state: Side panel visible alongside the active tab.
+#
+Actor
+Action
+Data In
+Data Out
+1
+USER
+Clicks the StyleSnap toolbar icon (puzzle piece → StyleSnap).
+Click event
+chrome.action.onClicked fires
+2
+SW
+chrome.action.onClicked listener fires. Calls chrome.sidePanel.open({ tabId }).
+tabId
+Side panel opens
+3
+PANEL
+React app mounts (or comes into focus if already open). Hydrates Zustand store from chrome.storage.local.
+settings, history
+Store populated
+4
+PANEL
+Checks if an extraction for the current tab URL exists in history (IndexedDB lookup). If yes, renders it. If no, renders empty state.
+current tab URL
+IDLE state — last extraction or empty
+5
+USER
+Side panel is visible. Can interact with all tabs.
+—
+Flow complete
+4.1  Decision: Restricted Page
+If the user clicks the icon on a restricted page (chrome://, extensions page, Chrome Web Store):
+#
+Actor
+Action
+Data In
+Data Out
+1
+USER
+Clicks icon on restricted page (chrome://settings, etc.)
+Click event
+—
+2
+SW
+chrome.sidePanel.open() succeeds — panel still opens.
+—
+Panel opens
+3
+PANEL
+Panel detects current tab URL is restricted. Renders notice: "StyleSnap cannot extract on this page type. Navigate to a regular website."
+tab URL
+IDLE — restricted page notice
+4
+USER
+Navigates to a normal website. Panel auto-updates to normal IDLE state.
+—
+Flow resets
+5. Flow 3 — Full Page Extraction  [V1]
+This is the core flow — the main reason StyleSnap exists. Trigger: User clicks the "Extract" button in the side panel.
+Pre-conditions: Side panel open. User on a non-restricted page. State is IDLE.
+End state: Full design token set displayed in panel. State returns to IDLE. Extraction saved to history.
+5.1  Happy Path
+#
+Actor
+Action
+Data In
+Data Out
+1
+USER
+Clicks "Extract Full Page" button in side panel.
+—
+EXTRACT_PAGE message dispatched
+2
+PANEL
+Dispatches EXTRACT_PAGE message via chrome.runtime.sendMessage. Sets UI state to EXTRACTING. Shows progress bar at 0%.
+Current tab URL + options
+State → EXTRACTING
+3
+SW
+Receives EXTRACT_PAGE. Calls chrome.scripting.executeScript to inject content script into active tab (if not already injected).
+tabId, script path
+CS injected
+4
+SW
+Establishes port connection with CS (chrome.runtime.connect) to keep SW alive for the full extraction duration.
+—
+Port open: "stylesnap-extraction"
+5
+CS
+Content script initialises. Sends EXTRACTION_PROGRESS (step: "Starting", pct: 5%) back via port.
+—
+Progress: 5%
+6
+CS
+Phase 1: Iterates document.styleSheets. Extracts all CSS custom properties (--variables) and @media breakpoints. Skips cross-origin sheets with SecurityError.
+document.styleSheets
+cssVars{}, breakpoints[]
+7
+CS
+Sends EXTRACTION_PROGRESS (step: "Reading CSS variables", pct: 20%).
+—
+Progress: 20%
+8
+CS
+Phase 2: Walks DOM (up to 2000 elements). Calls getComputedStyle() on each visible element. Collects colors, fonts, spacings, radii, shadows.
+document.querySelectorAll("*")
+rawTokens{}
+9
+CS
+Sends EXTRACTION_PROGRESS (step: "Analysing design tokens", pct: 55%).
+—
+Progress: 55%
+10
+CS
+Phase 3: Deduplicates and normalises all collected values. Scores by frequency. Classifies into semantic groups. Detects CSS framework (Tailwind/CSS-in-JS/vanilla).
+rawTokens{}
+DesignTokens{}
+11
+CS
+Sends EXTRACTION_PROGRESS (step: "Scanning assets", pct: 70%).
+—
+Progress: 70%
+12
+CS
+Asset scan: queries all img, svg, picture, CSS background-image, favicon elements. Builds asset manifest.
+DOM
+AssetManifest{}
+13
+CS
+Sends EXTRACTION_PROGRESS (step: "Finalising", pct: 90%).
+—
+Progress: 90%
+14
+CS
+Assembles final ExtractionResult. Sends EXTRACTION_COMPLETE via port to SW.
+DesignTokens + AssetManifest
+ExtractionResult{}
+15
+SW
+Receives ExtractionResult. Persists full record to IndexedDB (extractions store). Updates history index in chrome.storage.local (prepends new entry, trims to max 10).
+ExtractionResult{}
+idbKey written, history updated
+16
+SW
+Forwards ExtractionResult to side panel via chrome.runtime.sendMessage.
+ExtractionResult{}
+EXTRACTION_COMPLETE → Panel
+17
+SW
+Closes port connection.
+—
+Port closed
+18
+PANEL
+Receives ExtractionResult. Updates Zustand store. Renders Tokens tab with color swatches, font specimens, spacing visualiser. Sets state to IDLE.
+ExtractionResult{}
+State → IDLE, UI updated
+19
+USER
+Sees full design system displayed in side panel. Can browse tabs and export.
+—
+Flow complete
+5.2  Progress Bar Checkpoints
+Progress %
+Step Label
+What is happening
+5%
+Starting
+Content script initialised, ready to extract
+20%
+Reading CSS variables
+Phase 1 complete — stylesheet scan done
+55%
+Analysing design tokens
+Phase 2 complete — DOM walk done
+70%
+Scanning assets
+Phase 3 complete — normalisation done
+90%
+Finalising
+Asset manifest assembled, result being packaged
+100%
+Done
+ExtractionResult delivered to panel, stored in IndexedDB
+5.3  Error Paths
+#
+Actor
+Action
+Data In
+Data Out
+E1
+ERROR
+CS fails to inject (restricted page, CSP block). SW catches scripting error.
+ScriptInjectionError
+—
+E1
+SW
+Sends ERROR message to panel: "Cannot extract on this page. The page may be blocking scripts."
+—
+State → ERROR
+E2
+ERROR
+Port disconnects mid-extraction (SW terminated by Chrome — rare).
+Port disconnect event
+—
+E2
+CS
+Detects port disconnect via port.onDisconnect. Saves checkpoint to chrome.storage.session.
+Partial ExtractionResult
+Checkpoint saved
+E2
+PANEL
+Detects SW disconnect. Shows: "Extraction interrupted. Click Retry to resume." Retry re-triggers from checkpoint.
+—
+State → ERROR with retry option
+E3
+ERROR
+Page has no visible elements (SPA pre-render, blank page).
+Empty DOM walk result
+—
+E3
+CS
+Detects element count = 0 after DOM walk. Sends ERROR_EMPTY to SW.
+—
+State → ERROR
+E3
+PANEL
+Shows: "No content detected. The page may still be loading — wait and try again."
+—
+State → ERROR
+6. Flow 4 — Element Inspector  [V1]
+Trigger: User clicks the "Inspect Element" button in the side panel (Inspector tab or toolbar icon).
+Pre-conditions: Side panel open. User on a non-restricted page. State is IDLE.
+End state: User has copied the CSS/HTML of their chosen element. State returns to IDLE.
+6.1  Activation Flow
+#
+Actor
+Action
+Data In
+Data Out
+1
+USER
+Clicks "Inspect Element" button in side panel.
+—
+INSPECT_ACTIVATE message sent
+2
+PANEL
+Sends INSPECT_ACTIVATE message to CS. Sets state to INSPECTING. Shows instruction banner: "Hover over any element on the page and click to inspect it."
+—
+State → INSPECTING
+3
+CS
+Receives INSPECT_ACTIVATE. Injects the overlay <div> into the page body. Attaches mouseover and click listeners to document (capture phase — runs before page listeners).
+—
+Overlay active, listeners attached
+4
+USER
+Moves mouse over page elements. Sees indigo bounding-box overlay following the cursor.
+Mouse position
+Overlay repositioned per element
+5
+CS
+On each mouseover: reads getBoundingClientRect() of hovered element. Positions overlay to match.
+e.target
+Overlay: top/left/width/height updated
+6.2  Selection Flow
+#
+Actor
+Action
+Data In
+Data Out
+6
+USER
+Clicks on the desired element.
+Click event
+—
+7
+CS
+Intercepts click (e.preventDefault, e.stopPropagation). Reads element's full computed CSS (non-default values only) and outerHTML (truncated to 2000 chars). Removes overlay and listeners (inspector auto-deactivates).
+e.target
+{ tagName, html, css, boundingBox }
+8
+CS
+Sends ELEMENT_SELECTED message to SW with element data.
+ElementPayload{}
+Message sent
+9
+SW
+Forwards ELEMENT_SELECTED payload to side panel.
+ElementPayload{}
+Panel receives data
+10
+PANEL
+Renders element result: tag name badge, formatted CSS block (syntax highlighted), HTML snippet, bounding box dimensions. Shows copy buttons for CSS and HTML. Sets state to ELEMENT_SELECTED.
+ElementPayload{}
+State → ELEMENT_SELECTED
+11
+USER
+Reads CSS/HTML. Clicks "Copy CSS" or "Copy HTML" button. Pastes into their project.
+Copy button click
+CSS or HTML in clipboard
+6.3  Exit Paths
+#
+Actor
+Action
+Data In
+Data Out
+A
+USER
+Presses Escape key while INSPECTING.
+keydown: Escape
+—
+A
+CS
+Escape listener (attached during activation) fires. Removes overlay and listeners. Sends INSPECT_DEACTIVATE to panel.
+—
+Inspector cleaned up
+A
+PANEL
+Receives INSPECT_DEACTIVATE. Sets state back to IDLE. Hides instruction banner.
+—
+State → IDLE
+B
+USER
+Clicks "Inspect Again" after seeing a result.
+—
+Re-runs from step 1
+C
+USER
+Clicks "Done" after seeing a result.
+—
+PANEL sets state → IDLE
+7. Flow 5 — Asset Finder  [V1]
+Trigger: User clicks the "Assets" tab in the side panel after a page extraction.
+Pre-conditions: At least one extraction has been performed (ExtractionResult in Zustand store).
+End state: User has copied or downloaded desired assets.
+7.1  Asset Grid Display
+#
+Actor
+Action
+Data In
+Data Out
+1
+USER
+Clicks the "Assets" tab in the side panel.
+Tab click
+—
+2
+PANEL
+Reads AssetManifest from Zustand store (populated during extraction). Renders asset grid: thumbnails for images/SVGs, URL badges for CSS backgrounds, favicon row at top.
+AssetManifest{}
+Grid rendered
+3
+USER
+Browses asset grid. Can filter by type (Images / SVGs / Icons / Backgrounds).
+Filter toggle
+Filtered grid
+7.2  Individual Asset Copy
+#
+Actor
+Action
+Data In
+Data Out
+4
+USER
+Hovers over an asset card. Sees "Copy URL" and "Copy as Data URI" buttons appear.
+Hover
+Buttons visible
+5
+USER
+Clicks "Copy URL" — copies the asset's src/href to clipboard.
+Button click
+URL in clipboard
+6
+USER
+OR clicks "Copy as Data URI" — fetches the asset and encodes it as base64.
+Button click
+—
+7
+CS
+Fetches asset URL using the content script's fetch() (bypasses CORS for same-origin assets). Returns base64 data URI to panel.
+Asset URL
+data:image/...;base64,...
+8
+PANEL
+Receives data URI. Copies to clipboard. Shows success toast: "Copied as data URI."
+data URI
+URI in clipboard
+7.3  Bulk Download (ZIP)
+#
+Actor
+Action
+Data In
+Data Out
+9
+USER
+Clicks "Download All Assets (ZIP)" button.
+Button click
+EXPORT_FILE message
+10
+PANEL
+Sends EXPORT_FILE message to SW: { format: "assets-zip", extractionId }.
+—
+SW receives request
+11
+SW
+Reads AssetManifest from IndexedDB for given extractionId. Fetches each asset URL via fetch() from the SW context. Builds JSZip archive with folder structure: /images/, /icons/, /svgs/.
+AssetManifest{}
+JSZip instance
+12
+SW
+Calls chrome.downloads.download({ url: blobURL, filename: "stylesnap-assets.zip" }). Triggers browser download.
+Blob URL
+File saved to user Downloads folder
+13
+PANEL
+Shows success toast: "Assets downloaded." State → IDLE.
+—
+Flow complete
+8. Flow 6 — File Export  [V1]
+Trigger: User clicks an export button (Copy to Clipboard or Download File) from the Tokens tab.
+Pre-conditions: Extraction complete. ExtractionResult in Zustand store.
+End state: File downloaded to user's Downloads folder or content copied to clipboard.
+8.1  Export Format Selection
+#
+Actor
+Action
+Data In
+Data Out
+1
+USER
+On the Tokens tab, clicks the "Export" dropdown button.
+Click
+Dropdown opens
+2
+PANEL
+Renders export options: DESIGN.md, tokens.json, tailwind.config.js, Copy to Clipboard (DESIGN.md).
+—
+Options visible
+3
+USER
+Selects a format. e.g., "Download tokens.json".
+Format selection
+EXPORT_FILE message dispatched
+8.2  Download Flow
+#
+Actor
+Action
+Data In
+Data Out
+4
+PANEL
+Sends EXPORT_FILE message to SW: { format: "tokens-json", extractionId }.
+—
+SW receives
+5
+SW
+Reads ExtractionResult from IndexedDB for given extractionId.
+extractionId
+ExtractionResult{}
+6
+SW
+Runs export generator for selected format. Transforms DesignTokens → W3C DTCG 2025.10 tokens.json string (or DESIGN.md markdown, or tailwind.config.js string).
+DesignTokens{}
+File content string
+7
+SW
+Creates a Blob from the string. Creates an Object URL. Calls chrome.downloads.download({ url, filename: "stylesnap-tokens.json" }).
+File string
+Download initiated
+8
+SW
+Revokes the Object URL after download starts.
+—
+Memory cleaned
+9
+PANEL
+Receives EXPORT_COMPLETE. Shows success toast: "tokens.json downloaded." Dropdown closes.
+—
+State → IDLE
+8.3  Copy to Clipboard Flow
+#
+Actor
+Action
+Data In
+Data Out
+4
+USER
+Selects "Copy DESIGN.md to Clipboard".
+—
+—
+5
+PANEL
+Generates DESIGN.md string directly in panel context (no SW needed for clipboard operations). Calls navigator.clipboard.writeText().
+DesignTokens from store
+Text in clipboard
+6
+PANEL
+Shows success toast: "DESIGN.md copied to clipboard." Icon briefly turns green.
+—
+Flow complete
+9. Flow 7 — Extraction History  [V1]
+Trigger: User clicks the "History" tab in the side panel.
+Pre-conditions: At least one extraction has been performed.
+End state: User is viewing a past extraction or has deleted entries.
+9.1  View History
+#
+Actor
+Action
+Data In
+Data Out
+1
+USER
+Clicks "History" tab.
+Tab click
+—
+2
+PANEL
+Reads HistoryIndex from chrome.storage.local (already in Zustand store). Renders list of up to 10 past extractions: favicon, page title, URL (truncated), timestamp, token count.
+HistoryIndex{}
+History list rendered
+3
+USER
+Clicks a history entry.
+Entry click
+HISTORY_LOAD message
+4
+PANEL
+Sends request to SW to fetch full ExtractionResult from IndexedDB by idbKey.
+idbKey
+—
+5
+SW
+Reads ExtractionResult from IndexedDB. Sends back to panel.
+idbKey
+ExtractionResult{}
+6
+PANEL
+Loads ExtractionResult into Zustand store. Switches to Tokens tab. Renders the historical extraction. Shows timestamp banner: "Extracted 2 days ago from example.com"
+ExtractionResult{}
+Historical extraction displayed
+9.2  Delete History Entry
+#
+Actor
+Action
+Data In
+Data Out
+7
+USER
+Clicks the trash icon on a history entry.
+Delete click
+—
+8
+PANEL
+Shows confirmation: "Delete this extraction? This cannot be undone."
+—
+Confirm dialog
+9
+USER
+Confirms deletion.
+Confirm click
+HISTORY_DELETE message
+10
+SW
+Removes entry from chrome.storage.local HistoryIndex. Deletes ExtractionRecord from IndexedDB. If entry had screenshots, deletes from screenshots store too (cascading delete).
+idbKey
+Entry purged from both stores
+11
+PANEL
+Removes entry from Zustand store. Re-renders history list.
+—
+Flow complete
+9.3  History Overflow (Auto-Eviction)
+When a new extraction would push history past 10 entries, the oldest entry is automatically evicted. This runs in the SW at step 15 of Flow 3 (Full Page Extraction). The eviction deletes both the chrome.storage.local HistoryEntry and the corresponding IndexedDB records (extraction + screenshots) in a single atomic operation.
+10. Flow 8 — Settings  [V1]
+Trigger: User clicks the settings gear icon in the side panel header.
+All settings are applied immediately and persisted to chrome.storage.local.
+#
+Actor
+Action
+Data In
+Data Out
+1
+USER
+Clicks settings gear icon.
+Click
+Settings panel slides open
+2
+PANEL
+Renders settings panel: Theme toggle (Light/Dark/System), Default export format selector, Default AI tool selector, Clear history button.
+current settings from store
+Settings UI rendered
+3
+USER
+Toggles a setting (e.g., changes theme to Dark).
+Setting change
+—
+4
+PANEL
+Updates Zustand store immediately (UI updates in real-time). Persists new settings to chrome.storage.local.
+New setting value
+chrome.storage.local updated
+5
+USER
+Clicks "Clear All History". Confirms in dialog.
+Confirm click
+HISTORY_CLEAR message
+6
+SW
+Clears all entries from chrome.storage.local history[]. Clears all records from IndexedDB extractions and screenshots stores. Requests unlimitedStorage permission revocation (best-effort — Chrome may not revoke immediately).
+—
+All data purged
+7
+PANEL
+Resets history in Zustand. Shows success toast: "All history cleared."
+—
+Flow complete
+11. Flow 9 — Screenshot Pipeline  [V2]
+Trigger: Automatically runs as part of Full Page Extraction at V2. Can also be triggered manually from the side panel.
+Pre-conditions: V2 build. User on a normal webpage. Extraction in progress or just completed.
+End state: Full-page PNG and per-section screenshots stored in IndexedDB. Available for download.
+11.1  Capture Flow
+#
+Actor
+Action
+Data In
+Data Out
+1
+CS
+After Phase 3 token extraction, begins screenshot pipeline. Records page dimensions: scrollHeight, innerHeight, innerWidth.
+window dimensions
+{ pageH, viewH, pageW }
+2
+CS
+Hides sticky/fixed elements (position: sticky, position: fixed) to prevent duplicate rendering in tiles.
+DOM sticky elements
+Elements hidden
+3
+CS
+Disables CSS smooth-scroll: document.documentElement.style.scrollBehavior = "auto"
+—
+Instant scroll enabled
+4
+CS
+Begins tile loop. Iteration 0: window.scrollTo(0, 0). Waits 150ms for paint.
+—
+Page at top
+5
+CS
+Sends CAPTURE_SCREENSHOT to SW (one-shot message — not port).
+—
+SW captures
+6
+SW
+Receives CAPTURE_SCREENSHOT. Calls chrome.tabs.captureVisibleTab(null, { format: "png" }). Returns dataUrl.
+—
+Tile dataUrl (base64 PNG)
+7
+CS
+Receives tile dataUrl. Appends to tiles[] array. Scrolls to next position: window.scrollTo(0, (i+1) * viewH). Waits 150ms.
+dataUrl
+tiles[i] stored in CS memory
+8
+CS
+Repeats steps 5–7 until scrollY + viewH >= pageH OR tile count = 50 (safety limit).
+—
+All tiles captured
+9
+CS
+Restores hidden sticky elements. Restores smooth-scroll. Scrolls page back to 0. Sends STITCH_TILES to panel with tiles[] array + dimensions.
+tiles[], dimensions
+STITCH_TILES → Panel
+11.2  Stitching Flow (Side Panel)
+#
+Actor
+Action
+Data In
+Data Out
+10
+PANEL
+Receives tiles[] array. Creates an off-screen <canvas> element. Sets dimensions to { width: tile0.naturalWidth, height: pageH * scale }.
+tiles[], pageH
+Canvas ready
+11
+PANEL
+Draws each tile onto canvas at y = i * tileHeight. Handles partial last tile (uses clip).
+tiles[]
+Full-page composite on canvas
+12
+PANEL
+Calls canvas.toBlob() → PNG Blob.
+—
+fullPageBlob: Blob
+13
+PANEL
+Sends STORE_SCREENSHOT to SW with { extractionId, fullPageBlob }.
+fullPageBlob
+SW stores
+14
+SW
+Writes ScreenshotRecord to IndexedDB screenshots store. Stores fullPage blob.
+fullPageBlob
+IndexedDB updated
+15
+PANEL
+Shows "Screenshots ready" badge on the export dropdown. Full-page screenshot now available for download.
+—
+Flow complete
+Per-section screenshots: After full-page capture, the CS identifies each section boundary (from the LayoutStructure data) and sends CAPTURE_SECTION messages to SW for each section's scroll position. Each section screenshot is cropped from the corresponding tile and stored as a SectionShot in the same ScreenshotRecord.
+12. Flow 10 — Component Detection  [V2]
+Trigger: Automatically runs as part of Full Page Extraction at V2, after token extraction completes.
+Pre-conditions: V2 build. DesignTokens extracted. DOM still accessible.
+End state: Component library displayed in Components tab. components.md exportable.
+#
+Actor
+Action
+Data In
+Data Out
+1
+CS
+Phase 4 (V2 only): Component detection begins after Phase 3 completes. Sends EXTRACTION_PROGRESS (step: "Detecting components", pct: 75%).
+—
+Progress: 75%
+2
+CS
+Signal 1 — Semantic HTML scan: Queries <button>, <nav>, <input>, <form>, <header>, <footer>, <dialog>, <select>. Assigns base score 0.35 to each found instance.
+document.querySelectorAll
+semanticCandidates[]
+3
+CS
+Signal 2 — ARIA role scan: Queries elements with role attribute. Adds 0.25 to their score.
+[role]
+ariaCandidates[]
+4
+CS
+Signal 3 — Repeated structure scan: Runs getStructureSignature() on all elements with 2+ children (up to 1500 elements). Groups by signature. Identifies signatures with 3+ instances.
+All elements
+patternMap: Map<sig, Element[]>
+5
+CS
+Signal 4 — Class name heuristic: Checks element.className for btn, card, modal, badge, chip, hero, avatar, nav, tag. Adds 0.15 if matched.
+element.className
+classHits[]
+6
+CS
+Merges all signals. Calculates total confidence score per candidate. Filters to confidence >= 0.60. Deduplicates (if the same element is detected by multiple signals, it's counted once).
+All signals
+components: Component[]
+7
+CS
+For each confirmed component: extracts outerHTML (first clean instance, text truncated, src normalised), computed CSS (non-default values), ARIA label, tag name, instance count.
+Confirmed components
+Component[]
+8
+CS
+Appends Component[] to ExtractionResult. Sends EXTRACTION_PROGRESS (pct: 88%).
+Component[]
+Result updated
+9
+SW
+Receives final ExtractionResult (with components). Persists to IndexedDB. Forwards to panel.
+ExtractionResult + components
+Stored + forwarded
+10
+PANEL
+Renders Components tab: grid of component cards (label, instance count, confidence bar, HTML/CSS preview). Copy button per component. "Export components.md" button.
+Component[]
+Components tab populated
+11
+USER
+Browses components. Clicks "Copy HTML" or "Copy CSS" on a component. Uses it in their project.
+Copy click
+Flow complete
+12.1  Uncertain Component Handling
+#
+Actor
+Action
+Data In
+Data Out
+U1
+CS
+Element scores 0.45–0.59 (uncertain). Added to uncertainComponents[] list.
+Score 0.45–0.59
+uncertainComponents[]
+U2
+PANEL
+Renders uncertain components in a collapsed "Uncertain Detections" section at the bottom of the Components tab with a warning icon and confidence score shown.
+uncertainComponents[]
+Uncertain section rendered
+U3
+USER
+Can expand and review uncertain components. Can manually promote them to confirmed (adds to export) or dismiss.
+User action
+Component list updated
+13. Flow 11 — AI Prompt Generation  [V2]
+Trigger: User opens the "AI Prompt" tab in the side panel after extraction.
+Pre-conditions: V2 build. Extraction complete (ExtractionResult in Zustand store).
+End state: Master prompt copied to clipboard or downloaded, ready to paste into AI coding tool.
+#
+Actor
+Action
+Data In
+Data Out
+1
+USER
+Clicks "AI Prompt" tab in side panel.
+Tab click
+—
+2
+PANEL
+Reads ExtractionResult from Zustand store. Renders AI Prompt tab: tool selector (Cursor / Claude Code / v0 / Bolt / Lovable), prompt preview pane, Copy and Download buttons.
+ExtractionResult{}
+AI Prompt tab rendered
+3
+USER
+Selects target AI tool from dropdown (e.g., "Cursor").
+Tool selection
+selectedTool = "cursor"
+4
+PANEL
+Runs prompt generator for selected tool. Loads the Cursor template. Injects extracted tokens, type scale, spacing, component list, and Tailwind config into the template. Renders formatted prompt in preview pane.
+ExtractionResult + template
+Prompt string rendered in preview
+5
+USER
+Reviews prompt. Clicks "Copy Prompt" or "Download as .txt".
+Action click
+—
+6
+PANEL
+Copy: calls navigator.clipboard.writeText(promptString). Shows success toast: "Prompt copied — paste directly into Cursor."
+promptString
+Prompt in clipboard
+7
+SW
+Download: panel sends EXPORT_FILE message. SW generates Blob and calls chrome.downloads.download({ filename: "stylesnap-cursor-prompt.txt" }).
+promptString
+File in Downloads folder
+Prompt regeneration: Switching between tools in the dropdown instantly re-generates the prompt using a different template — no SW call needed. Generation happens synchronously in the panel for < 100ms.
+14. Flow 12 — Animation & Scroll Detection  [V3]
+Trigger: Automatically runs as the final phase of Full Page Extraction at V3.
+Pre-conditions: V3 build. Extraction Phases 1–4 complete. Page JS context still active.
+End state: Animation report appended to ExtractionResult. Displayed in tokens output and included in all export formats.
+14.1  MAIN World Injection Flow
+#
+Actor
+Action
+Data In
+Data Out
+1
+CS
+After Phase 4 (components), CS sends DETECT_ANIMATIONS to SW. Includes current tabId.
+tabId
+DETECT_ANIMATIONS → SW
+2
+SW
+Receives DETECT_ANIMATIONS. Calls chrome.scripting.executeScript({ target: { tabId }, files: ["animation.js"], world: "MAIN" }). This injects the animation detector into the page's own JS context.
+tabId, script
+MAIN world script injected
+3
+CS
+Simultaneously, the ISOLATED content script adds a window.addEventListener("message") listener to receive results from the MAIN world script via postMessage.
+—
+Cross-world listener active
+4
+MAIN
+animation.js runs inside the page's JS context. Has access to all page window globals. Begins detection sequence.
+window.*
+—
+5
+MAIN
+Checks window.gsap. If found: reads window.gsap.version. Reads ScrollTrigger.getAll() for all active trigger configurations (start, end, scrub, pin, toggleClass, ease).
+window.gsap, ScrollTrigger
+gsapReport{}
+6
+MAIN
+Checks window.AOS. If found: reads window.AOS.options. Queries all [data-aos] elements. Builds full AOS config from element data attributes.
+window.AOS, [data-aos]
+aosReport{}
+7
+MAIN
+Checks window.lenis. If found: reads lenis.options (duration, easing, smoothWheel, infinite).
+window.lenis
+lenisReport{}
+8
+MAIN
+Checks window.LocomotiveScroll. If found: reads DOM data-scroll attributes for speed, direction, delay. Checks window.locomotiveScroll instance.
+window.LocomotiveScroll
+locomotiveReport{}
+9
+MAIN
+Checks window.ScrollMagic. Checks window.THREE (Three.js). Checks window.motion / window.__framer_importedPackages (Framer Motion). Records version and presence.
+window.*
+tier2Report{}
+10
+MAIN
+Checks for vanilla scroll heuristics: IntersectionObserver usage (new IntersectionObserver calls), CSS transition/animation properties on elements, requestAnimationFrame calls in globalThis.
+window heuristics
+tier3Report{}
+11
+MAIN
+Assembles final AnimationReport. Posts result via window.postMessage({ source: "stylesnap-main", type: "ANIMATION_RESULT", payload: AnimationReport }).
+All reports
+postMessage → ISOLATED
+14.2  Result Relay & Display Flow
+#
+Actor
+Action
+Data In
+Data Out
+12
+CS
+Window message listener fires. Validates source: "stylesnap-main". Forwards AnimationReport to SW via chrome.runtime.sendMessage.
+AnimationReport{}
+Message → SW
+13
+SW
+Receives AnimationReport. Removes window.message listener on CS side. Appends AnimationReport to ExtractionResult in IndexedDB. Forwards to panel.
+AnimationReport{}
+IndexedDB updated, → Panel
+14
+PANEL
+Receives AnimationReport. Renders animation section in Tokens tab: detected library badges (e.g., "GSAP 3.12.5" green pill), expandable trigger details, accuracy tier labels.
+AnimationReport{}
+Animation section rendered
+15
+USER
+Reads animation report. Can copy the full animation description. Information is also included in all export formats (DESIGN.md, master prompt).
+—
+Flow complete
+14.3  Error Paths — Animation Detection
+#
+Actor
+Action
+Data In
+Data Out
+E1
+ERROR
+MAIN world injection blocked by strict CSP (script-src 'none' or whitelist without extension origin).
+ScriptInjectionError
+—
+E1
+SW
+Catches executeScript error. Falls back: sends CS instruction to perform DOM-only attribute scan (data-aos, data-scroll, data-animation etc.).
+—
+Tier 3 fallback
+E1
+PANEL
+Renders animation section with notice: "Full animation detection unavailable on this page (CSP restriction). DOM-attribute detection only."
+tier3Report{}
+Degraded output shown
+E2
+ERROR
+postMessage result never received (MAIN world script failed silently or page reloaded during detection).
+Timeout (3 seconds)
+—
+E2
+CS
+Timeout fires after 3 seconds with no message. Removes listener. Sends ANIMATION_TIMEOUT to SW.
+—
+Timeout event
+E2
+PANEL
+Shows notice: "Animation detection timed out. The page may have reloaded. Re-extract to try again."
+—
+Non-blocking error notice
+15. Inter-Context Data Flow Summary
+This section maps which data types flow between which contexts throughout all flows, serving as a quick reference for implementation.
+Data Type
+From
+To
+Channel
+EXTRACT_PAGE command
+PANEL
+SW
+chrome.runtime.sendMessage (one-shot)
+Content script injection
+SW
+CS
+chrome.scripting.executeScript
+EXTRACTION_PROGRESS events
+CS
+SW → PANEL
+Port (chrome.runtime.connect) → sendMessage relay
+ExtractionResult (full payload)
+CS
+SW → PANEL
+Port → EXTRACTION_COMPLETE message relay
+ELEMENT_SELECTED payload
+CS
+SW → PANEL
+chrome.runtime.sendMessage → relay
+Screenshot tile (dataUrl)
+SW
+CS / PANEL
+sendMessage response (captureVisibleTab result)
+Stitched screenshot (Blob)
+PANEL
+SW
+sendMessage with Blob payload → IndexedDB write
+AnimationReport (MAIN→ISOLATED)
+MAIN
+CS (ISOLATED)
+window.postMessage (only cross-world channel)
+AnimationReport (ISOLATED→PANEL)
+CS
+SW → PANEL
+chrome.runtime.sendMessage relay
+Settings (read)
+Storage
+PANEL
+chrome.storage.local.get() at panel mount
+Settings (write)
+PANEL
+Storage
+chrome.storage.local.set() on user change
+ExtractionResult (persist)
+SW
+IndexedDB
+idb v8 — openDB → tx → objectStore.add()
+Exported file download
+SW
+OS Downloads
+chrome.downloads.download({ url: blobUrl, filename })
+16. Extension Lifecycle Events
+These are system-level flows triggered by Chrome, not by the user.
+Event
+Handler
+Action
+chrome.runtime.onInstalled (reason: install)
+SW
+Write default settings to chrome.storage.local. Write empty history. Open side panel. Log install analytics (none at V1 — privacy-first).
+chrome.runtime.onInstalled (reason: update)
+SW
+Run schema migration if storage version < current. Show "What's new" toast on next panel open. Preserve all existing extractions.
+chrome.runtime.onStartup
+SW
+No-op at V1. Reserved for future background sync or cache warming.
+chrome.tabs.onActivated
+SW
+Notifies panel of new active tab. Panel checks if a cached extraction exists for this URL and updates the header URL/title display.
+chrome.tabs.onUpdated (status: complete)
+SW
+If user navigated to a new URL on the active tab, panel header updates to show new URL. Does NOT auto-extract.
+Port disconnect (SW termination)
+CS
+CS saves extraction checkpoint to chrome.storage.session. Sends last progress event. Panel shows "Interrupted — retry" state.
+chrome.storage.onChanged
+PANEL
+Panel listens for external storage changes (e.g., settings changed in another tab). Syncs Zustand store if detected.
+17. Global Error & Recovery Flows
+These error flows apply across all operations and override any in-progress flow when triggered.
+17.1  IndexedDB Quota Exceeded
+#
+Actor
+Action
+Data In
+Data Out
+1
+SW
+IndexedDB write fails with QuotaExceededError during extraction save.
+QuotaExceededError
+—
+2
+SW
+Requests chrome.permissions.request({ permissions: ["unlimitedStorage"] }). This shows a Chrome permission dialog to the user.
+—
+Permission dialog shown
+3
+USER
+Accepts the permission dialog.
+User accepts
+unlimitedStorage granted
+4
+SW
+Retries the IndexedDB write with the new storage limit.
+ExtractionResult{}
+Write succeeds
+ALT
+USER
+Declines the permission dialog.
+User declines
+—
+ALT
+SW
+Falls back: stores ExtractionResult without screenshots (reduced footprint). Notifies panel: "Storage limit reached. Screenshots disabled for this extraction."
+—
+Extraction saved without screenshots
+17.2  Content Script Already Injected (Re-extraction on Same Tab)
+#
+Actor
+Action
+Data In
+Data Out
+1
+USER
+Clicks Extract on a page where CS was previously injected and is still alive.
+—
+EXTRACT_PAGE → SW
+2
+SW
+chrome.scripting.executeScript with injectImmediately: false — Chrome detects existing CS and re-uses it.
+—
+Existing CS receives message
+3
+CS
+Receives new EXTRACT_PAGE. Clears any previous extraction state. Runs fresh extraction from Phase 1.
+—
+Fresh extraction starts
+17.3  Panel Disconnects Mid-Extraction (User Closes Side Panel)
+#
+Actor
+Action
+Data In
+Data Out
+1
+USER
+Closes side panel during an active extraction.
+—
+Panel unmounts
+2
+SW
+Port remains open — CS continues extraction uninterrupted (port is CS→SW, panel is secondary recipient).
+—
+Extraction continues
+3
+SW
+Receives EXTRACTION_COMPLETE from CS. Stores result in IndexedDB normally.
+ExtractionResult{}
+Data persisted
+4
+USER
+Re-opens side panel later. Panel reads latest entry from history. Displays the completed extraction.
+—
+Extraction recovered from storage
+18. Flow Version Matrix
+Quick reference: which flows are available in which version.
+Flow
+V1
+V2
+V3
+Install & First Launch
+✅
+—
+—
+Open Side Panel
+✅
+—
+—
+Full Page Extraction (tokens + assets)
+✅
+✅ Extended
+✅ + Anims
+Element Inspector
+✅
+—
+—
+Asset Finder + ZIP Download
+✅
+—
+—
+File Export (DESIGN.md, tokens.json, tailwind.config.js)
+✅
++ components.md
++ animation md
+Extraction History (view, load, delete)
+✅
+—
+—
+Settings
+✅
+—
+—
+Screenshot Pipeline (scroll-stitch full page)
+—
+✅
+—
+Component Detection + components.md
+—
+✅
+—
+Layout Structure Extraction
+—
+✅
+—
+AI Master Prompt Generation (per-tool tuned)
+—
+✅
+—
+Animation & Scroll Detection (GSAP/AOS/Lenis etc.)
+—
+—
+✅
+Three.js / WebGL Presence Detection
+—
+—
+✅
+19. Document History
+Version
+Date
+Author
+Changes
+v1.0
+July 2026
+Guru (Soham Belwadkar)
+Initial flow doc — 12 flows, all 3 versions, lifecycle events, error flows

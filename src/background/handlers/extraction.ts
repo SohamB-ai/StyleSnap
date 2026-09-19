@@ -39,6 +39,12 @@ export async function handleExtractPage(tabId: number, options?: { domLimit?: nu
   const safeOptions = { domLimit: options?.domLimit ?? 2000 };
 
   try {
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (tab?.url && isRestrictedUrl(tab.url)) {
+      sendExtractionError("restricted");
+      return;
+    }
+
     chrome.tabs.sendMessage(
       tabId,
       {
@@ -65,7 +71,7 @@ async function injectAndRetry(tabId: number, options: { domLimit: number }): Pro
     const url = tab.url || "";
 
     if (isRestrictedUrl(url)) {
-      sendExtractionError("Cannot extract from browser internal pages (chrome://, extensions, etc.). Navigate to a website and try again.");
+      sendExtractionError("restricted");
       return;
     }
 

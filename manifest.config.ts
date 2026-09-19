@@ -23,8 +23,20 @@ export default defineManifest(async (env) => ({
     default_path: "src/sidepanel/index.html"
   },
   action: {
-    default_title: "StyleSnap — Extract DESIGN.md & SKILL.md",
-    default_popup: "src/sidepanel/index.html"
+    default_title: "StyleSnap",
+    default_popup: "src/sidepanel/index.html",
+    default_icon: {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  icons: {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   },
   content_scripts: [
     {

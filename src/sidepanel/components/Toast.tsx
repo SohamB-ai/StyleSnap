@@ -1,27 +1,37 @@
-// Toast Notification Component
+// Toast Notification Component — Styled per Task 5 Specification
 
 import React from "react";
-import { CheckCircle2, AlertCircle } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { useStore } from "../store";
 
 export const Toast: React.FC = () => {
   const toast = useStore((s) => s.toast);
+  const dismissToast = useStore((s) => s.dismissToast);
 
   if (!toast) return null;
 
+  const isSuccess = toast.type === "success";
+
   return (
-    <div className="absolute bottom-16 right-4 z-50 animate-in slide-in-from-bottom-2 duration-200">
+    <div className="absolute bottom-4 right-4 z-50 animate-in slide-in-from-bottom-2 fade-in duration-200 pointer-events-auto">
       <div
-        className={`px-3 py-2 rounded-md shadow-lg bg-elevated border-l-4 border-y border-r border-border text-xs flex items-center gap-2 max-w-[260px] ${
-          toast.type === "error" ? "border-l-error text-error" : "border-l-success text-primary"
+        onClick={dismissToast}
+        className={`w-max max-w-[320px] bg-elevated rounded-lg shadow-xl px-3.5 py-2.5 text-xs text-primary flex items-center gap-2 cursor-pointer transition-opacity border-l-4 ${
+          isSuccess ? "border-l-success" : "border-l-error"
         }`}
+        style={{
+          borderLeftWidth: "4px",
+          borderLeftColor: isSuccess ? "var(--success)" : "var(--error)"
+        }}
       >
-        {toast.type === "error" ? (
-          <AlertCircle className="w-4 h-4 text-error shrink-0" />
+        {isSuccess ? (
+          <Check className="w-3.5 h-3.5 text-success shrink-0" />
         ) : (
-          <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+          <X className="w-3.5 h-3.5 text-error shrink-0" />
         )}
-        <span className="font-medium text-xs truncate">{toast.message}</span>
+        <span className="font-sans text-[12px] text-primary select-none">
+          {toast.message}
+        </span>
       </div>
     </div>
   );

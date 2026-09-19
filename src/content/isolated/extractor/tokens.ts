@@ -232,6 +232,10 @@ export function scanStylesheets(): { cssVars: Record<string, string>; breakpoint
 
 // Phase 2 & 3: Extract & Deduplicate Tokens
 export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; warnings: string[]; framework: FrameworkType } {
+  if (typeof document !== "undefined" && document.querySelectorAll("*").length < 20) {
+    throw new Error("empty-dom");
+  }
+
   const { cssVars, breakpoints: sheetBreakpoints, warnings } = scanStylesheets();
 
   const colorCounts = new Map<string, { parsed: ParsedColor; count: number; contexts: Set<ColorContext> }>();

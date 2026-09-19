@@ -129,7 +129,7 @@ export const MarkdownViewer: React.FC = () => {
         </div>
 
         {/* Code Content Viewport */}
-        <div className="p-3 font-mono text-[11px] leading-relaxed max-h-[260px] overflow-y-auto select-text">
+        <div className="p-3 font-mono text-[11px] leading-relaxed max-h-[260px] overflow-y-auto overscroll-contain select-text">
           {renderFormattedMarkdown(markdownText)}
         </div>
       </div>

@@ -1,377 +1,255 @@
-// Tokens Tab View Component — Visual Tokens Specification (Task 2)
+// Tokens Tab View Component — Collapsible "Read More" Accordion Layout
 
-import React, { useState } from "react";
-import { CopyButton } from "./CopyButton";
+import React from "react";
+import { Sparkles } from "lucide-react";
 import { useStore } from "../store";
+import { CopyButton } from "./CopyButton";
+import { CollapsibleSection } from "./CollapsibleSection";
 import { ColorToken } from "../../shared/types";
 
 export const TokensTab: React.FC = () => {
-  const extraction = useStore((s) => s.extraction || s.result);
-  const [showAllColors, setShowAllColors] = useState<boolean>(false);
+  const result = useStore((s) => s.result);
 
-  // If no extraction yet, show a grey placeholder skeleton for each section
-  if (!extraction) {
-    return (
-      <div className="p-3.5 space-y-5 pb-8 select-none">
-        {/* Colours Skeleton */}
-        <div className="space-y-2">
-          <div className="h-3 w-16 bg-elevated rounded animate-shimmer" />
-          <div className="space-y-1.5">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div
-                key={i}
-                className="h-12 bg-surface border border-border rounded-lg p-2.5 flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded bg-elevated animate-shimmer shrink-0" />
-                  <div className="space-y-1">
-                    <div className="h-3 w-16 bg-elevated rounded animate-shimmer" />
-                    <div className="h-2.5 w-24 bg-elevated rounded animate-shimmer" />
-                  </div>
-                </div>
-                <div className="h-3 w-12 bg-elevated rounded animate-shimmer" />
-              </div>
-            ))}
-          </div>
-        </div>
+  if (!result) return null;
 
-        <div className="border-t border-border" />
+  const { tokens } = result;
 
-        {/* Typography Skeleton */}
-        <div className="space-y-2">
-          <div className="h-3 w-20 bg-elevated rounded animate-shimmer" />
-          <div className="h-20 bg-surface border border-border rounded-lg p-3 space-y-2">
-            <div className="h-4 w-32 bg-elevated rounded animate-shimmer" />
-            <div className="flex gap-1.5 pt-1">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-5 w-10 bg-elevated rounded-full animate-shimmer" />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-border" />
-
-        {/* Spacing Skeleton */}
-        <div className="space-y-2">
-          <div className="h-3 w-16 bg-elevated rounded animate-shimmer" />
-          <div className="h-16 bg-surface border border-border rounded-lg p-3 space-y-2">
-            <div className="h-2 w-3/4 bg-elevated rounded animate-shimmer" />
-            <div className="h-2 w-1/2 bg-elevated rounded animate-shimmer" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const { tokens } = extraction;
-
-  // Helpers for Copying
-  const getAllColorsCSS = () => {
+  const formatCSSRootVariables = () => {
     let css = ":root {\n";
     for (const c of tokens.colors) {
-      const varName = c.cssVarName || `--color-${c.suggestedName.toLowerCase().replace(/\s+/g, "-")}`;
-      css += `  ${varName}: ${c.hex};\n`;
+      css += `  ${c.cssVarName || `--color-${c.suggestedName.toLowerCase().replace(/\s+/g, "-")}`}: ${c.hex};\n`;
     }
     css += "}";
     return css;
   };
 
-  const getTypographyCSS = (familyStack?: string) => {
-    if (familyStack) {
-      return `font-family: ${familyStack};`;
-    }
-    let css = "/* Typography System */\n";
-    for (const f of tokens.typography.families) {
-      css += `/* ${f.name} */\n--font-${f.name.toLowerCase()}: ${f.stack};\n`;
-    }
-    return css;
-  };
-
-  const getSpacingScaleCSS = () => {
-    let css = `/* Spacing Scale (${tokens.spacing.baseUnit}px grid) */\n`;
-    tokens.spacing.values.forEach((v) => {
-      css += `--${v.token}: ${v.px}px;\n`;
-    });
-    return css;
-  };
-
-  const getShadowsCSS = () => {
-    let css = "/* Shadows */\n";
-    tokens.shadows.forEach((sh) => {
-      css += `--shadow-${sh.level}: ${sh.value};\n`;
-    });
-    return css;
-  };
-
-  const getBreakpointsCSS = () => {
-    let css = "/* Media Query Breakpoints */\n";
-    tokens.breakpoints.forEach((b) => {
-      css += `@media (min-width: ${b.px}px) { /* ${b.label} */ }\n`;
-    });
-    return css;
-  };
-
-  const displayedColors = showAllColors ? tokens.colors : tokens.colors.slice(0, 5);
-  const maxSpacingPx = tokens.spacing.values.length > 0 
-    ? Math.max(...tokens.spacing.values.map((v) => v.px), 64) 
-    : 64;
-
   return (
-    <div className="p-3.5 space-y-5 pb-8 text-xs select-none">
-      {/* SECTION A — COLOURS */}
-      <section className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-[11px] uppercase tracking-wider text-muted font-sans">
-            COLOURS
-          </h3>
-          <CopyButton textToCopy={getAllColorsCSS()} label="Copy CSS" />
+    <div className="p-3 space-y-4 pb-8 text-xs">
+      {/* Theme Summary Banner */}
+      {tokens.themeSummary && (
+        <div className="bg-accent/10 border border-accent/25 rounded-md p-2.5 flex items-start gap-2">
+          <Sparkles className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+          <div>
+            <div className="font-bold text-[11px] text-accent uppercase tracking-wider">Website Theme</div>
+            <p className="text-[11px] text-secondary leading-snug">{tokens.themeSummary}</p>
+          </div>
         </div>
+      )}
 
-        <div className="space-y-1.5">
-          {displayedColors.map((color: ColorToken) => (
+      {/* 1. COLOURS SECTION */}
+      <CollapsibleSection
+        title="Colours"
+        count={tokens.colors.length}
+        defaultOpen={true}
+        headerExtra={<CopyButton textToCopy={formatCSSRootVariables()} label="Copy CSS" />}
+        previewSummary={
+          <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+            {tokens.colors.slice(0, 6).map((c) => (
+              <div
+                key={c.id}
+                className="w-5 h-5 rounded border border-border shrink-0 shadow-xs"
+                style={{ backgroundColor: c.hex }}
+                title={`${c.suggestedName}: ${c.hex}`}
+              />
+            ))}
+            {tokens.colors.length > 6 && (
+              <span className="text-[10px] text-muted font-mono">+{tokens.colors.length - 6}</span>
+            )}
+          </div>
+        }
+      >
+        <div className="grid grid-cols-1 gap-1.5">
+          {tokens.colors.map((color: ColorToken) => (
             <div
               key={color.id}
-              className="bg-surface border border-border rounded-lg p-2.5 flex items-center justify-between gap-3 group hover:border-accent/40 transition-colors"
+              className="bg-surface border border-border rounded p-2 flex items-center justify-between group hover:border-accent/50 transition-colors"
             >
-              {/* Left: Swatch */}
-              <div
-                className="w-7 h-7 rounded shrink-0 border border-border shadow-xs"
-                style={{ backgroundColor: color.hex }}
-                title={color.hex}
-              />
-
-              {/* Center-left: Hex + suggestedName */}
-              <div className="flex-1 min-w-0">
-                <div className="font-mono text-[12px] font-bold text-accent truncate">
-                  {color.hex}
-                </div>
-                <div className="font-sans text-[12px] font-semibold text-primary truncate">
-                  {color.suggestedName}
-                </div>
-              </div>
-
-              {/* Center-right: HSL string */}
-              <div className="hidden sm:block font-sans text-[11px] text-secondary font-normal truncate max-w-[120px]">
-                {color.hsl}
-              </div>
-
-              {/* Right: Frequency badge + Copy icon (shows on hover) */}
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="font-sans text-[11px] text-muted bg-elevated px-1.5 py-0.5 rounded">
-                  {color.frequency}
-                </span>
-                <CopyButton
-                  textToCopy={color.hex}
-                  iconOnly
-                  className="opacity-80 group-hover:opacity-100 transition-opacity"
+              {/* Left: Swatch & Info */}
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-7 h-7 rounded border border-border shadow-xs shrink-0"
+                  style={{ backgroundColor: color.hex }}
+                  title={color.hex}
                 />
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-xs font-bold text-primary">{color.hex}</span>
+                    <span className="text-[10px] text-secondary truncate max-w-[100px]">
+                      {color.suggestedName}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[9px] text-muted font-mono">
+                    <span>{color.hsl}</span>
+                    <span className="capitalize bg-elevated px-1 rounded text-[8px] text-secondary">
+                      {color.semanticGroup}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: Frequency & Copy */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] font-mono text-muted bg-elevated px-1.5 py-0.5 rounded">
+                  {color.frequency}x
+                </span>
+                <CopyButton textToCopy={color.hex} iconOnly />
               </div>
             </div>
           ))}
         </div>
+      </CollapsibleSection>
 
-        {tokens.colors.length > 5 && (
-          <button
-            onClick={() => setShowAllColors(!showAllColors)}
-            className="w-full py-1 text-[11px] font-medium text-accent hover:text-accent-hover transition-colors text-center"
-          >
-            {showAllColors ? "Show top 5" : `Show all ${tokens.colors.length} colours`}
-          </button>
-        )}
-      </section>
-
-      {/* Divider */}
-      <div className="border-t border-border" />
-
-      {/* SECTION B — TYPOGRAPHY */}
-      <section className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-[11px] uppercase tracking-wider text-muted font-sans">
-            TYPOGRAPHY
-          </h3>
-          <CopyButton textToCopy={getTypographyCSS()} label="Copy CSS" />
-        </div>
-
-        <div className="space-y-2">
-          {tokens.typography.families.map((family, idx) => {
-            // Find size steps that match this family (or generic ones)
-            const sizes = tokens.typography.scale
-              .filter((s) => s.fontFamily === family.name || !s.fontFamily)
-              .map((s) => s.fontSize);
-            const displaySizes = Array.from(new Set(sizes.length > 0 ? sizes : ["12px", "14px", "16px", "24px", "32px"]));
-
-            return (
-              <div
-                key={idx}
-                className="bg-surface border border-border rounded-lg p-3 space-y-2"
-              >
-                {/* Family Row */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-baseline gap-2 truncate">
-                    <span className="font-sans font-semibold text-[13px] text-primary truncate">
-                      {family.name}
-                    </span>
-                    <span className="font-sans text-[11px] text-muted truncate">
-                      {family.category}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] font-mono text-muted bg-elevated px-1.5 py-0.5 rounded">
-                      {family.weights.length} weights
-                    </span>
-                    <CopyButton textToCopy={getTypographyCSS(family.stack)} label="Copy CSS" />
-                  </div>
-                </div>
-
-                {/* Size Scale Chips */}
-                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                  {displaySizes.map((sz, szIdx) => (
-                    <span
-                      key={szIdx}
-                      className="px-2 py-0.5 rounded-full bg-elevated border border-border text-[10px] font-mono text-secondary"
-                    >
-                      {sz}
-                    </span>
-                  ))}
-                </div>
+      {/* 2. TYPOGRAPHY SECTION */}
+      <CollapsibleSection
+        title="Typography"
+        count={tokens.typography.families.length}
+        defaultOpen={false}
+        headerExtra={
+          tokens.typography.families[0] ? (
+            <CopyButton textToCopy={tokens.typography.families[0].stack} label="Copy Font" />
+          ) : undefined
+        }
+        previewSummary={
+          <div className="text-[11px] text-secondary font-mono">
+            {tokens.typography.families[0]?.name || "System fonts"} · {tokens.typography.scale.length} scale steps
+          </div>
+        }
+      >
+        {tokens.typography.families.map((family, i) => (
+          <div key={i} className="bg-surface border border-border rounded p-2.5 space-y-2">
+            <div className="flex items-center justify-between border-b border-border/50 pb-1.5">
+              <div>
+                <span className="font-bold text-xs text-primary">{family.name}</span>
+                <span className="text-[9px] text-muted ml-2 font-mono">{family.category}</span>
               </div>
-            );
-          })}
-        </div>
-      </section>
+              <span className="text-[9px] text-muted font-mono">
+                {family.weights.join(", ")}
+              </span>
+            </div>
 
-      {/* Divider */}
-      <div className="border-t border-border" />
-
-      {/* SECTION C — SPACING */}
-      <section className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-[11px] uppercase tracking-wider text-muted font-sans">
-              SPACING
-            </h3>
-            <span className="text-[10px] font-mono bg-elevated border border-border text-secondary px-1.5 py-0.5 rounded">
-              {tokens.spacing.baseUnit}px grid
-            </span>
-          </div>
-          <CopyButton textToCopy={getSpacingScaleCSS()} label="Copy Scale" />
-        </div>
-
-        <div className="bg-surface border border-border rounded-lg p-3 space-y-2">
-          {tokens.spacing.values.slice(0, 8).map((sp, idx) => {
-            const barWidth = Math.min(160, Math.max(8, Math.round((sp.px / maxSpacingPx) * 160)));
-            return (
-              <div key={idx} className="flex items-center gap-3">
-                <span className="w-12 text-right font-mono text-[11px] text-muted shrink-0">
-                  {sp.px}px
-                </span>
-                <div className="flex-1 flex items-center">
-                  <div
-                    className="bg-accent rounded-xs"
-                    style={{
-                      width: `${barWidth}px`,
-                      height: "6px",
-                      borderRadius: "2px",
-                      backgroundColor: "var(--accent)"
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Divider */}
-      <div className="border-t border-border" />
-
-      {/* SECTION D — SHADOWS + RADII (side by side, 2-col) */}
-      <section className="grid grid-cols-2 gap-3">
-        {/* Left Col: SHADOWS */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-[11px] uppercase tracking-wider text-muted font-sans">
-              SHADOWS
-            </h3>
-            <CopyButton textToCopy={getShadowsCSS()} label="Copy" />
-          </div>
-
-          <div className="bg-surface border border-border rounded-lg p-2.5 space-y-2">
-            {(tokens.shadows.length > 0 ? tokens.shadows : [
-              { level: "sm", value: "0 1px 2px 0 rgba(0,0,0,0.05)" },
-              { level: "md", value: "0 4px 6px -1px rgba(0,0,0,0.1)" },
-              { level: "lg", value: "0 10px 15px -3px rgba(0,0,0,0.1)" },
-              { level: "xl", value: "0 20px 25px -5px rgba(0,0,0,0.1)" }
-            ]).map((sh: any, idx) => (
-              <div key={idx} className="flex items-center justify-between text-[11px]">
-                <span className="font-mono text-primary uppercase">{sh.level}</span>
-                <div
-                  className="w-5 h-5 bg-elevated border border-border rounded"
-                  style={{ boxShadow: sh.value }}
-                  title={sh.value}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right Col: RADII */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-[11px] uppercase tracking-wider text-muted font-sans">
-              RADII
-            </h3>
-            <CopyButton
-              textToCopy={tokens.radii.map((r) => `--radius-${r.level}: ${r.value};`).join("\n")}
-              label="Copy"
-            />
-          </div>
-
-          <div className="bg-surface border border-border rounded-lg p-2.5 space-y-2">
-            {(tokens.radii.length > 0 ? tokens.radii : [
-              { level: "none", value: "0px" },
-              { level: "sm", value: "4px" },
-              { level: "md", value: "8px" },
-              { level: "lg", value: "12px" },
-              { level: "full", value: "9999px" }
-            ]).map((r: any, idx) => (
-              <div key={idx} className="flex items-center justify-between text-[11px]">
-                <span className="font-mono text-primary">{r.level}</span>
-                <div
-                  className="w-5 h-5 bg-elevated border border-accent/40"
-                  style={{ borderRadius: r.value }}
-                  title={r.value}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Divider */}
-      <div className="border-t border-border" />
-
-      {/* SECTION E — BREAKPOINTS */}
-      <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-[11px] uppercase tracking-wider text-muted font-sans">
-            BREAKPOINTS
-          </h3>
-          <CopyButton textToCopy={getBreakpointsCSS()} label="Copy CSS" />
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {tokens.breakpoints.map((b, idx) => (
-            <span
-              key={idx}
-              className="px-2.5 py-1 rounded-full bg-surface border border-border font-mono text-[11px] text-primary"
+            {/* Font Specimen Preview */}
+            <div
+              className="text-base font-medium text-primary py-0.5 truncate"
+              style={{ fontFamily: family.stack }}
             >
-              {b.label ? `${b.label}: ` : ""}{b.px}px
-            </span>
+              The quick brown fox jumps over the lazy dog
+            </div>
+
+            {/* Type Scale Chips */}
+            <div className="flex flex-wrap gap-1 pt-1">
+              {tokens.typography.scale.slice(0, 6).map((entry, idx) => (
+                <div
+                  key={idx}
+                  className="bg-elevated px-1.5 py-0.5 rounded text-[9px] font-mono text-secondary flex items-center gap-1"
+                >
+                  <span className="font-semibold text-primary uppercase">{entry.role}:</span>
+                  <span>{entry.fontSize}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </CollapsibleSection>
+
+      {/* 3. SPACING SCALE SECTION */}
+      <CollapsibleSection
+        title="Spacing Scale"
+        count={`${tokens.spacing.baseUnit}px Grid`}
+        defaultOpen={false}
+        headerExtra={
+          <CopyButton
+            textToCopy={tokens.spacing.values.map((v) => `${v.px}px`).join(", ")}
+            label="Copy Scale"
+          />
+        }
+        previewSummary={
+          <div className="text-[11px] font-mono text-secondary">
+            {tokens.spacing.values.slice(0, 5).map((v) => `${v.px}px`).join(" · ")}
+          </div>
+        }
+      >
+        <div className="bg-surface border border-border rounded p-2.5 space-y-2">
+          {tokens.spacing.values.map((sp, idx) => (
+            <div key={idx} className="flex items-center justify-between text-xs">
+              <span className="font-mono text-[10px] text-secondary w-10">{sp.px}px</span>
+              
+              {/* Visualizer Bar */}
+              <div className="flex-1 mx-2 bg-elevated h-1.5 rounded overflow-hidden">
+                <div
+                  className="bg-accent h-full rounded"
+                  style={{ width: `${Math.min(100, (sp.px / 64) * 100)}%` }}
+                />
+              </div>
+
+              <span className="font-mono text-[9px] text-muted w-12 text-right">{sp.rem}</span>
+            </div>
           ))}
         </div>
-      </section>
+      </CollapsibleSection>
+
+      {/* 4. SHADOWS & RADII */}
+      <CollapsibleSection
+        title="Shadows & Border Radius"
+        count={`${tokens.shadows.length} sh / ${tokens.radii.length} rad`}
+        defaultOpen={false}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          {/* Shadows */}
+          <div className="space-y-1.5">
+            <h5 className="text-[10px] font-bold uppercase tracking-wider text-secondary">Shadows</h5>
+            <div className="bg-surface border border-border rounded p-2 space-y-1">
+              {tokens.shadows.length > 0 ? (
+                tokens.shadows.map((sh, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-[9px] font-mono">
+                    <span className="text-primary capitalize">{sh.level}</span>
+                    <CopyButton textToCopy={sh.value} iconOnly />
+                  </div>
+                ))
+              ) : (
+                <span className="text-[9px] text-muted">No custom shadows</span>
+              )}
+            </div>
+          </div>
+
+          {/* Border Radii */}
+          <div className="space-y-1.5">
+            <h5 className="text-[10px] font-bold uppercase tracking-wider text-secondary">Border Radius</h5>
+            <div className="bg-surface border border-border rounded p-2 space-y-1">
+              {tokens.radii.length > 0 ? (
+                tokens.radii.map((r, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-[9px] font-mono">
+                    <span className="text-primary">{r.level} ({r.value})</span>
+                    <CopyButton textToCopy={r.value} iconOnly />
+                  </div>
+                ))
+              ) : (
+                <span className="text-[9px] text-muted">Default radii</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* 5. BREAKPOINTS SECTION */}
+      {tokens.breakpoints.length > 0 && (
+        <CollapsibleSection
+          title="Breakpoints"
+          count={tokens.breakpoints.length}
+          defaultOpen={false}
+        >
+          <div className="grid grid-cols-2 gap-1.5">
+            {tokens.breakpoints.map((b, idx) => (
+              <div
+                key={idx}
+                className="bg-surface border border-border rounded p-1.5 flex items-center justify-between text-xs"
+              >
+                <span className="font-bold text-accent uppercase text-[10px]">{b.label}</span>
+                <span className="font-mono text-[10px] text-secondary">{b.px}px</span>
+              </div>
+            ))}
+          </div>
+        </CollapsibleSection>
+      )}
     </div>
   );
 };

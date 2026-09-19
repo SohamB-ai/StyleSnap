@@ -1,15 +1,14 @@
 // History Tab View Component (Saved Extractions & Cascade Deletion)
 
 import React, { useEffect } from "react";
-import { Trash2, Clock } from "lucide-react";
+import { Trash2, ExternalLink, Clock } from "lucide-react";
 import { useStore } from "../store";
 import { MessageType } from "../../shared/messages";
 
 export const HistoryTab: React.FC = () => {
-  const history = useStore((s) => s.history || s.historyEntries);
+  const historyEntries = useStore((s) => s.historyEntries);
   const setHistory = useStore((s) => s.setHistory);
-  const setExtraction = useStore((s) => s.setExtraction);
-  const setActiveTab = useStore((s) => s.setActiveTab);
+  const setResult = useStore((s) => s.setResult);
   const showToast = useStore((s) => s.showToast);
 
   const fetchHistory = () => {
@@ -26,8 +25,7 @@ export const HistoryTab: React.FC = () => {
   const handleLoadEntry = (id: string) => {
     chrome.runtime.sendMessage({ type: MessageType.HISTORY_LOAD, payload: { id } }, (response) => {
       if (response?.result) {
-        setExtraction(response.result);
-        setActiveTab("tokens");
+        setResult(response.result);
         showToast("Loaded extraction from history", "success");
       }
     });
@@ -42,13 +40,10 @@ export const HistoryTab: React.FC = () => {
   };
 
   const handleClearAll = () => {
-    const confirmed = window.confirm("Clear all past extractions?");
-    if (confirmed) {
-      chrome.runtime.sendMessage({ type: MessageType.HISTORY_CLEAR }, () => {
-        setHistory([]);
-        showToast("All history cleared", "success");
-      });
-    }
+    chrome.runtime.sendMessage({ type: MessageType.HISTORY_CLEAR }, () => {
+      setHistory([]);
+      showToast("All history cleared", "success");
+    });
   };
 
   const formatTime = (ts: number) => {
@@ -61,39 +56,39 @@ export const HistoryTab: React.FC = () => {
   };
 
   return (
-    <div className="p-3.5 space-y-4 pb-8 select-none">
-      <div className="flex items-center justify-between border-b border-border pb-3">
+    <div className="p-4 space-y-4 pb-8">
+      <div className="flex items-center justify-between border-b border-border/60 pb-3">
         <div className="flex items-center gap-2">
-          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted font-sans">Past Extractions</h4>
+          <h4 className="text-xs font-bold uppercase tracking-wider text-secondary">Past Extractions</h4>
           <span className="text-[10px] bg-elevated px-1.5 py-0.5 rounded text-muted font-mono">
-            {history.length}/10
+            {historyEntries.length}/10
           </span>
         </div>
-        {history.length > 0 && (
+        {historyEntries.length > 0 && (
           <button
             onClick={handleClearAll}
-            className="text-[11px] text-error hover:opacity-80 font-medium transition-colors font-sans"
+            className="text-[11px] text-error hover:text-red-400 font-medium transition-colors"
           >
             Clear All
           </button>
         )}
       </div>
 
-      {history.length === 0 ? (
+      {historyEntries.length === 0 ? (
         <div className="text-center py-12 space-y-2">
           <Clock className="w-8 h-8 text-muted mx-auto" />
-          <div className="text-xs font-semibold text-primary font-sans">No extraction history yet</div>
-          <div className="text-[11px] text-muted max-w-[200px] mx-auto font-sans">
+          <div className="text-xs font-medium text-secondary">No extraction history yet</div>
+          <div className="text-[11px] text-muted max-w-[200px] mx-auto">
             Your last 10 extractions will automatically be saved here.
           </div>
         </div>
       ) : (
         <div className="space-y-2">
-          {history.map((entry) => (
+          {historyEntries.map((entry) => (
             <div
               key={entry.id}
               onClick={() => handleLoadEntry(entry.id)}
-              className="bg-surface border border-border rounded-lg p-3 flex items-center justify-between group hover:border-accent/60 hover:bg-hover cursor-pointer transition-all"
+              className="bg-surface border border-border rounded-md p-3 flex items-center justify-between group hover:border-accent/60 hover:bg-hover/60 cursor-pointer transition-all"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-7 h-7 rounded bg-elevated border border-border flex items-center justify-center overflow-hidden shrink-0">
@@ -107,7 +102,7 @@ export const HistoryTab: React.FC = () => {
                 </div>
 
                 <div className="min-w-0 space-y-0.5">
-                  <div className="font-semibold text-xs text-primary truncate max-w-[170px] font-sans">
+                  <div className="font-semibold text-xs text-primary truncate max-w-[170px]">
                     {entry.title}
                   </div>
                   <div className="flex items-center gap-2 text-[10px] text-secondary font-mono">
@@ -115,7 +110,7 @@ export const HistoryTab: React.FC = () => {
                     <span>•</span>
                     <span className="text-muted">{formatTime(entry.timestamp)}</span>
                   </div>
-                  <div className="text-[10px] text-muted font-sans">
+                  <div className="text-[10px] text-muted">
                     {entry.colorCount} colours • {entry.fontCount} fonts
                   </div>
                 </div>
@@ -126,7 +121,6 @@ export const HistoryTab: React.FC = () => {
                 onClick={(e) => handleDeleteEntry(e, entry.id)}
                 className="p-1.5 rounded text-muted hover:text-error hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-opacity"
                 title="Delete extraction"
-                aria-label="Delete extraction"
               >
                 <Trash2 className="w-4 h-4" />
               </button>

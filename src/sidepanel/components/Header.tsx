@@ -1,7 +1,7 @@
-// Header Component — Brand logo, active tab domain, inspector mode, settings trigger
+// Header Component — TypeUI DESIGN.md style header layout
 
 import React, { useEffect, useState } from "react";
-import { MousePointer2, Settings as SettingsIcon, MoreVertical } from "lucide-react";
+import { MousePointer2, Settings as SettingsIcon, Github, MoreVertical } from "lucide-react";
 import { useStore } from "../store";
 import { MessageType } from "../../shared/messages";
 import { StyleSnapLogoIcon } from "./Logo";
@@ -9,12 +9,11 @@ import { StyleSnapLogoIcon } from "./Logo";
 export const Header: React.FC = () => {
   const [currentUrl, setCurrentUrl] = useState<string>("Active Tab");
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
-  const inspectorActive = useStore((s) => s.inspectorActive || s.isInspecting);
-  const setInspectorActive = useStore((s) => s.setInspectorActive);
-  const openSettings = useStore((s) => s.openSettings);
-  const setActiveTab = useStore((s) => s.setActiveTab);
-  const setExtraction = useStore((s) => s.setExtraction);
-  const openExportPanel = useStore((s) => s.openExportPanel);
+  const isInspecting = useStore((s) => s.isInspecting);
+  const setInspecting = useStore((s) => s.setInspecting);
+  const toggleSettings = useStore((s) => s.toggleSettings);
+  const setTab = useStore((s) => s.setTab);
+  const setResult = useStore((s) => s.setResult);
 
   useEffect(() => {
     chrome.tabs?.query({ active: true, currentWindow: true }, (tabs) => {
@@ -30,8 +29,8 @@ export const Header: React.FC = () => {
   }, []);
 
   const handleToggleInspector = () => {
-    const nextState = !inspectorActive;
-    setInspectorActive(nextState);
+    const nextState = !isInspecting;
+    setInspecting(nextState);
     chrome.tabs?.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) {
         chrome.tabs.sendMessage(tabs[0].id, {
@@ -49,7 +48,7 @@ export const Header: React.FC = () => {
         <div className="flex items-center gap-2">
           <StyleSnapLogoIcon size={24} />
           <div className="flex items-baseline gap-1.5">
-            <h1 className="font-bold text-sm text-primary tracking-tight font-sans">
+            <h1 className="font-bold text-sm text-primary tracking-tight">
               StyleSnap
             </h1>
             <span className="text-[10px] text-secondary font-mono">
@@ -63,17 +62,17 @@ export const Header: React.FC = () => {
           <button
             onClick={handleToggleInspector}
             className={`p-1 rounded transition-colors ${
-              inspectorActive
+              isInspecting
                 ? "bg-accent text-white"
                 : "hover:text-primary hover:bg-hover"
             }`}
-            title={inspectorActive ? "Exit Inspector Mode" : "Hover Inspector Mode"}
+            title={isInspecting ? "Exit Inspector Mode" : "Hover Inspector Mode"}
             aria-label="Hover Inspector Mode"
           >
             <MousePointer2 className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={openSettings}
+            onClick={toggleSettings}
             className="p-1 rounded hover:text-primary hover:bg-hover transition-colors"
             title="Settings"
             aria-label="Settings"
@@ -93,28 +92,28 @@ export const Header: React.FC = () => {
           {menuOpen && (
             <div className="absolute right-0 top-7 w-44 bg-elevated border border-border rounded-lg shadow-lg py-1 z-50 text-xs">
               <button
-                onClick={() => { setActiveTab("history"); setMenuOpen(false); }}
+                onClick={() => { setTab("history"); setMenuOpen(false); }}
                 className="w-full px-3 py-1.5 text-left text-primary hover:bg-hover transition-colors flex items-center justify-between"
               >
-                <span>Past Extractions</span>
-                <span className="text-[10px] text-muted">History</span>
+                <span>Extraction History</span>
+                <span className="text-[10px] text-muted">View past</span>
               </button>
               <button
-                onClick={() => { openExportPanel(); setMenuOpen(false); }}
+                onClick={() => { setTab("export"); setMenuOpen(false); }}
                 className="w-full px-3 py-1.5 text-left text-primary hover:bg-hover transition-colors flex items-center justify-between"
               >
-                <span>Export &amp; AI Skills</span>
-                <span className="text-[10px] text-muted">Downloads</span>
+                <span>All Token Details</span>
+                <span className="text-[10px] text-muted">Raw CSS</span>
               </button>
               <button
-                onClick={() => { openSettings(); setMenuOpen(false); }}
+                onClick={() => { toggleSettings(); setMenuOpen(false); }}
                 className="w-full px-3 py-1.5 text-left text-primary hover:bg-hover transition-colors"
               >
-                Extension Settings
+                Extension Preferences
               </button>
               <div className="w-full h-[1px] bg-border my-1" />
               <button
-                onClick={() => { setExtraction(null); setMenuOpen(false); }}
+                onClick={() => { setResult(null); setMenuOpen(false); }}
                 className="w-full px-3 py-1.5 text-left text-error hover:bg-hover transition-colors"
               >
                 Scan New Page
@@ -125,9 +124,10 @@ export const Header: React.FC = () => {
       </div>
 
       {/* Subtitle Row */}
-      <p className="text-[11px] text-secondary leading-snug font-sans">
-        Extracts design tokens from active tab (<span className="text-primary font-mono">{currentUrl}</span>) for AI coding tools.
+      <p className="text-[11px] text-secondary leading-snug">
+        Auto generates from the active tab (<span className="text-primary font-mono">{currentUrl}</span>) based on DESIGN.md specifications.
       </p>
     </header>
   );
 };
+

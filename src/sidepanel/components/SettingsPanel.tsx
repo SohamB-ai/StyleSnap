@@ -1,20 +1,21 @@
-// Settings Panel Component — Task 9 Specification
+// Settings Drawer Panel Component
 
 import React, { useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
-import { useStore, Theme } from "../store";
+import { ArrowLeft, Moon, Sun, Monitor, Trash2, Check } from "lucide-react";
+import { useStore } from "../store";
 import { Settings, ExportFormat } from "../../shared/types";
 import { MessageType } from "../../shared/messages";
 
 export const SettingsPanel: React.FC = () => {
-  const settingsPanelOpen = useStore((s) => s.settingsPanelOpen || s.settingsOpen);
-  const closeSettings = useStore((s) => s.closeSettings);
+  const settingsOpen = useStore((s) => s.settingsOpen);
+  const toggleSettings = useStore((s) => s.toggleSettings);
   const theme = useStore((s) => s.theme);
   const setTheme = useStore((s) => s.setTheme);
   const setHistory = useStore((s) => s.setHistory);
   const showToast = useStore((s) => s.showToast);
 
   const [exportFormat, setExportFormat] = useState<ExportFormat>("design-md");
+  const [domLimit, setDomLimit] = useState<number>(2000);
 
   useEffect(() => {
     chrome.storage?.local.get("stylesnap_settings", (res) => {
@@ -22,18 +23,19 @@ export const SettingsPanel: React.FC = () => {
       if (s) {
         if (s.theme) setTheme(s.theme);
         if (s.defaultExportFormat) setExportFormat(s.defaultExportFormat);
+        if (s.domSampleLimit) setDomLimit(s.domSampleLimit);
       }
     });
   }, []);
 
-  if (!settingsPanelOpen) return null;
+  if (!settingsOpen) return null;
 
-  const handleThemeChange = (newTheme: Theme) => {
+  const handleThemeChange = (newTheme: "dark" | "light" | "system") => {
     setTheme(newTheme);
     chrome.storage?.local.get("stylesnap_settings", (res) => {
       const s = (res?.stylesnap_settings || {}) as Settings;
       s.theme = newTheme;
-      chrome.storage?.local.set({ stylesnap_settings: s });
+      chrome.storage.local.set({ stylesnap_settings: s });
     });
   };
 
@@ -42,115 +44,132 @@ export const SettingsPanel: React.FC = () => {
     chrome.storage?.local.get("stylesnap_settings", (res) => {
       const s = (res?.stylesnap_settings || {}) as Settings;
       s.defaultExportFormat = fmt;
-      chrome.storage?.local.set({ stylesnap_settings: s });
+      chrome.storage.local.set({ stylesnap_settings: s });
+    });
+  };
+
+  const handleDomLimitChange = (val: number) => {
+    setDomLimit(val);
+    chrome.storage?.local.get("stylesnap_settings", (res) => {
+      const s = (res?.stylesnap_settings || {}) as Settings;
+      s.domSampleLimit = val;
+      chrome.storage.local.set({ stylesnap_settings: s });
     });
   };
 
   const handleClearHistory = () => {
-    const confirmed = window.confirm("Delete all extraction history? This cannot be undone.");
-    if (confirmed) {
-      chrome.runtime.sendMessage({ type: MessageType.HISTORY_CLEAR }, () => {
-        setHistory([]);
-        showToast("All history cleared.", "success");
-      });
-    }
+    chrome.runtime.sendMessage({ type: MessageType.HISTORY_CLEAR }, () => {
+      setHistory([]);
+      showToast("All history cleared", "success");
+    });
   };
 
   return (
-    <div className="absolute right-0 top-0 w-full h-full bg-base z-30 flex flex-col animate-in slide-in-from-right duration-200 select-none">
+    <div className="absolute inset-0 bg-base z-50 flex flex-col animate-in slide-in-from-right duration-200">
       {/* Settings Header */}
-      <header
-        onClick={closeSettings}
-        className="h-[44px] bg-surface border-b border-border px-3.5 flex items-center gap-2.5 cursor-pointer shrink-0 hover:bg-hover transition-colors"
-      >
+      <header className="h-[48px] bg-surface border-b border-border px-4 flex items-center gap-3 shrink-0">
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            closeSettings();
-          }}
-          className="p-1 rounded text-secondary hover:text-primary transition-colors"
+          onClick={toggleSettings}
+          className="p-1 rounded text-secondary hover:text-primary hover:bg-hover transition-colors"
           title="Back to Panel"
-          aria-label="Back"
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <h3 className="font-semibold text-[14px] text-primary font-sans">
-          Settings
-        </h3>
+        <h3 className="font-bold text-sm text-primary">Settings</h3>
       </header>
 
-      {/* Settings Body */}
-      <div className="flex-1 min-h-0 p-4 space-y-6 overflow-y-auto">
-        {/* Section 1 — Theme */}
+      {/* Settings Options Body */}
+      <div className="flex-1 p-4 space-y-6 overflow-y-auto">
+        {/* 1. Theme Setting */}
         <div className="space-y-2">
-          <label className="text-xs font-semibold text-primary font-sans block">
-            Theme
+          <label className="text-xs font-bold uppercase tracking-wider text-secondary">
+            Appearance / Theme
           </label>
-          <div className="flex items-center gap-4 text-xs font-sans text-secondary">
-            {(
-              [
-                { id: "dark", label: "Dark" },
-                { id: "light", label: "Light" },
-                { id: "system", label: "System" }
-              ] as const
-            ).map(({ id, label }) => {
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { id: "dark", label: "Dark", icon: Moon },
+              { id: "light", label: "Light", icon: Sun },
+              { id: "system", label: "System", icon: Monitor }
+            ].map(({ id, label, icon: Icon }) => {
               const isSelected = theme === id;
               return (
-                <label
+                <button
                   key={id}
-                  className="flex items-center gap-1.5 cursor-pointer hover:text-primary transition-colors"
+                  onClick={() => handleThemeChange(id as any)}
+                  className={`py-2 px-3 rounded border text-xs font-medium flex flex-col items-center gap-1.5 transition-all ${
+                    isSelected
+                      ? "border-accent bg-accent/15 text-accent font-semibold"
+                      : "border-border bg-surface text-secondary hover:text-primary hover:bg-hover"
+                  }`}
                 >
-                  <input
-                    type="radio"
-                    name="theme"
-                    checked={isSelected}
-                    onChange={() => handleThemeChange(id)}
-                    className="accent-accent cursor-pointer"
-                  />
+                  <Icon className="w-4 h-4" />
                   <span>{label}</span>
-                </label>
+                </button>
               );
             })}
           </div>
         </div>
 
-        {/* Section 2 — Default export format */}
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-primary font-sans block">
-            Default export format
+        {/* 2. Default Export Format */}
+        <div className="space-y-2 pt-2 border-t border-border/60">
+          <label className="text-xs font-bold uppercase tracking-wider text-secondary">
+            Default Export Format
           </label>
           <select
             value={exportFormat}
             onChange={(e) => handleExportFormatChange(e.target.value as ExportFormat)}
-            className="w-full bg-surface border border-border rounded-md px-3 py-2 text-xs font-sans text-primary focus:outline-none focus:border-accent"
+            className="w-full bg-surface border border-border rounded-md px-3 py-2 text-xs text-primary focus:outline-none focus:border-accent"
           >
-            <option value="design-md">DESIGN.md</option>
-            <option value="tokens-json">tokens.json</option>
-            <option value="tailwind-config">tailwind.config.js</option>
-            <option value="skill-md">SKILL.md</option>
+            <option value="design-md">DESIGN.md (AI-Ready Markdown)</option>
+            <option value="tokens-json">tokens.json (W3C DTCG Specification)</option>
+            <option value="tailwind-config">tailwind.config.js (Tailwind v3 Theme)</option>
           </select>
         </div>
 
-        {/* Section 3 — Data & Privacy */}
-        <div className="space-y-2.5">
-          <label className="text-xs font-semibold text-primary font-sans block">
-            Data &amp; Privacy
+        {/* 3. DOM Element Sample Limit */}
+        <div className="space-y-2 pt-2 border-t border-border/60">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold uppercase tracking-wider text-secondary">
+              DOM Sample Limit
+            </label>
+            <span className="font-mono text-xs font-bold text-accent">{domLimit} elements</span>
+          </div>
+          <input
+            type="range"
+            min={500}
+            max={3000}
+            step={250}
+            value={domLimit}
+            onChange={(e) => handleDomLimitChange(Number(e.target.value))}
+            className="w-full accent-accent"
+          />
+          <p className="text-[10px] text-muted leading-relaxed">
+            Limits computed style sampling to maximize performance on heavy web pages.
+          </p>
+        </div>
+
+        {/* 4. Storage & Data Privacy */}
+        <div className="space-y-2 pt-2 border-t border-border/60">
+          <label className="text-xs font-bold uppercase tracking-wider text-secondary">
+            Data & Privacy
           </label>
           <button
             onClick={handleClearHistory}
-            className="w-full py-2 px-3 bg-error/10 border border-error/40 text-error hover:bg-error hover:text-white rounded-md text-xs font-medium transition-colors"
+            className="w-full py-2 px-3 bg-error/10 border border-error/40 text-error hover:bg-error hover:text-white rounded text-xs font-medium flex items-center justify-center gap-2 transition-colors"
           >
-            Clear all history
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Clear All Extraction History</span>
           </button>
-          <p className="text-[12px] text-muted leading-relaxed font-sans">
-            All data is stored locally in your browser. Nothing leaves your device.
+          <p className="text-[10px] text-muted leading-relaxed">
+            All design token extractions live 100% locally in your browser. Nothing is ever sent to an external server.
           </p>
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="h-10 border-t border-border bg-surface px-4 flex items-center justify-center text-[11px] text-muted font-sans shrink-0">
-        StyleSnap v1.0.0 &nbsp;&middot;&nbsp; Omenova Studio
+      {/* Settings Footer Version info */}
+      <footer className="h-10 border-t border-border bg-surface px-4 flex items-center justify-between text-[10px] text-muted">
+        <span>StyleSnap v1.0.0</span>
+        <span>Omenova Studio</span>
       </footer>
     </div>
   );

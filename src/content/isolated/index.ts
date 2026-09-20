@@ -4,6 +4,8 @@ import { MessageType } from "../../shared/messages";
 import { ExtractionResult } from "../../shared/types";
 import { extractTokens } from "./extractor/tokens";
 import { scanAssets } from "./extractor/assets";
+import { extractLayout } from "./extractor/layout";
+import { detectComponents } from "./extractor/components";
 import { activateInspector, deactivateInspector } from "./inspector";
 
 let port: chrome.runtime.Port | null = null;
@@ -22,7 +24,9 @@ function getPort(): chrome.runtime.Port {
   return port!;
 }
 
-function sendProgress(step: string, pct: number, phase: 1 | 2 | 3) {
+function sendProgress(step: string, pct: number, phase: 1 | 2 | 3 | 4) {
+  if (typeof chrome === "undefined" || !chrome.runtime?.id) return;
+
   try {
     const p = getPort();
     if (p) {
@@ -34,10 +38,12 @@ function sendProgress(step: string, pct: number, phase: 1 | 2 | 3) {
   } catch {}
   
   // Direct fallback
-  chrome.runtime.sendMessage({
-    type: MessageType.EXTRACTION_PROGRESS,
-    payload: { step, pct, phase }
-  }).catch(() => {});
+  try {
+    chrome.runtime.sendMessage({
+      type: MessageType.EXTRACTION_PROGRESS,
+      payload: { step, pct, phase }
+    }).catch(() => {});
+  } catch {}
 }
 
 function runFullExtraction(domLimit: number = 2000) {
@@ -53,7 +59,12 @@ function runFullExtraction(domLimit: number = 2000) {
 
       // Scan Assets
       const assets = scanAssets();
-      sendProgress("Scanning page images, icons & favicons...", 85, 3);
+      sendProgress("Scanning page images, icons & favicons...", 80, 3);
+
+      // Phase 4: Layout & Components [V2]
+      sendProgress("Analyzing page layout & component patterns...", 90, 4);
+      const layout = extractLayout();
+      const components = detectComponents(domLimit);
 
       const duration = Date.now() - startTime;
       const extractionId = `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -66,26 +77,36 @@ function runFullExtraction(domLimit: number = 2000) {
         favicon: assets.favicon?.dataUri || "",
         timestamp: startTime,
         duration,
-        version: "1.0.0",
+        version: "2.0.0",
         tokens,
         assets,
+        layout,
+        components,
         warnings,
         confidence: 0.96,
         detectedFramework: framework
       };
 
-      sendProgress("Extraction complete!", 100, 3);
+      sendProgress("Extraction complete!", 100, 4);
 
-      chrome.runtime.sendMessage({
-        type: MessageType.EXTRACTION_COMPLETE,
-        payload: result
-      });
+      if (typeof chrome !== "undefined" && chrome.runtime?.id) {
+        chrome.runtime.sendMessage({
+          type: MessageType.EXTRACTION_COMPLETE,
+          payload: result
+        }).catch(() => {});
+      }
     } catch (err: any) {
       console.error("StyleSnap Extraction Error:", err);
-      chrome.runtime.sendMessage({
-        type: MessageType.EXTRACTION_ERROR,
-        payload: { reason: err.message || "Failed to parse page styles." }
-      }).catch(() => {});
+      let reason = err.message || "Failed to parse page styles.";
+      if (reason === "empty-dom") {
+        reason = "This page has minimal DOM content. Please wait for the page to finish loading and try again.";
+      }
+      if (typeof chrome !== "undefined" && chrome.runtime?.id) {
+        chrome.runtime.sendMessage({
+          type: MessageType.EXTRACTION_ERROR,
+          payload: { reason }
+        }).catch(() => {});
+      }
     }
   }, 10);
 }

@@ -3,7 +3,8 @@
 import JSZip from "jszip";
 import { MessageType, ExportFilePayload } from "../../shared/messages";
 import { loadExtraction } from "../services/db";
-import { generateTokensJSON, generateDesignMD, generateSkillMD, generateTailwindConfig } from "../services/exporter";
+import { generateTokensJSON, generateDesignMD, generateSkillMD, generateTailwindConfig, generateComponentsMD } from "../services/exporter";
+import { generateMasterPrompt, AITool } from "../services/promptEngine";
 
 export async function handleExportFile(payload: ExportFilePayload): Promise<void> {
   const result = await loadExtraction(payload.extractionId);
@@ -47,6 +48,16 @@ export async function handleExportFile(payload: ExportFilePayload): Promise<void
       content = generateTailwindConfig(result);
       filename = `tailwind.config.${originSlug}.js`;
       mimeType = "application/javascript";
+      break;
+    case "components-md":
+      content = generateComponentsMD(result);
+      filename = `components-${originSlug}-${dateSlug}.md`;
+      mimeType = "text/markdown";
+      break;
+    case "master-prompt":
+      content = generateMasterPrompt(result, (payload as any).tool || "cursor");
+      filename = `master-prompt-${(payload as any).tool || "cursor"}-${originSlug}-${dateSlug}.txt`;
+      mimeType = "text/plain";
       break;
     default:
       content = generateDesignMD(result);

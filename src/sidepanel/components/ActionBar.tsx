@@ -5,11 +5,11 @@ import { Zap, Download, Loader2, ChevronDown, FileText, Code, FileJson, Archive,
 import { useStore } from "../store";
 import { MessageType } from "../../shared/messages";
 import { ExportFormat } from "../../shared/types";
+import { triggerPageExtraction } from "../utils/tab";
 
 export const ActionBar: React.FC = () => {
   const isExtracting = useStore((s) => s.isExtracting);
   const result = useStore((s) => s.result);
-  const startExtraction = useStore((s) => s.startExtraction);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -24,16 +24,7 @@ export const ActionBar: React.FC = () => {
   }, []);
 
   const handleExtract = () => {
-    if (isExtracting) return;
-    startExtraction();
-    chrome.tabs?.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.runtime.sendMessage({
-          type: MessageType.EXTRACT_PAGE,
-          payload: { tabId: tabs[0].id, options: { domLimit: 2000 } }
-        });
-      }
-    });
+    triggerPageExtraction();
   };
 
   const handleExport = (format: ExportFormat) => {

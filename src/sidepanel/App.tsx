@@ -11,6 +11,10 @@ import { MarkdownViewer } from "./components/MarkdownViewer";
 import { TokensTab } from "./components/TokensTab";
 import { AssetsTab } from "./components/AssetsTab";
 import { HistoryTab } from "./components/HistoryTab";
+import { ExportTab } from "./components/ExportTab";
+import { LayoutView } from "./components/LayoutView";
+import { ComponentsTab } from "./components/ComponentsTab";
+import { AIPromptTab } from "./components/AIPromptTab";
 import { ElementSelected } from "./components/ElementSelected";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Toast } from "./components/Toast";
@@ -74,8 +78,11 @@ export const App: React.FC = () => {
           <>
             {activeTab === "tokens" && <MarkdownViewer />}
             {activeTab === "assets" && <MarkdownViewer />}
-            {activeTab === "export" && <TokensTab />}
+            {activeTab === "export" && <ExportTab />}
             {activeTab === "history" && <HistoryTab />}
+            {activeTab === "layout" && <LayoutView />}
+            {activeTab === "components" && <ComponentsTab />}
+            {activeTab === "ai-prompt" && <AIPromptTab />}
           </>
         ) : activeTab === "history" ? (
           <HistoryTab />

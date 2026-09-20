@@ -1,7 +1,7 @@
 // IndexedDB Storage Engine (idb v8) & History Index
 
 import { openDB, DBSchema, IDBPDatabase } from "idb";
-import { ExtractionRecord, ExtractionResult, HistoryStore, HistoryEntry } from "../../shared/types";
+import { ExtractionRecord, ExtractionResult, HistoryStore, HistoryEntry, ScreenshotRecord } from "../../shared/types";
 
 interface StyleSnapDB extends DBSchema {
   extractions: {
@@ -15,7 +15,7 @@ interface StyleSnapDB extends DBSchema {
   };
   screenshots: {
     key: string;
-    value: { id: string; fullPage: Blob };
+    value: ScreenshotRecord;
   };
 }
 
@@ -50,8 +50,8 @@ export function buildHistoryEntry(result: ExtractionResult): HistoryEntry {
     durationMs: result.duration,
     colorCount: result.tokens.colors.length,
     fontCount: result.tokens.typography.families.length,
-    componentCount: 0,
-    hasScreenshots: false,
+    componentCount: result.components?.length || 0,
+    hasScreenshots: false, // will be updated when screenshot is saved
     version: result.version,
   };
 }
@@ -120,4 +120,25 @@ export async function loadExtraction(id: string): Promise<ExtractionResult | nul
   const db = await openStyleSnapDB();
   const record = await db.get("extractions", id);
   return record?.result ?? null;
+}
+
+export async function saveScreenshot(record: ScreenshotRecord): Promise<void> {
+  const db = await openStyleSnapDB();
+  await db.put("screenshots", record);
+  
+  // Update history entry to reflect screenshot availability
+  const storage = await chrome.storage.local.get("stylesnap_history");
+  if (storage.stylesnap_history) {
+    const history: HistoryStore = storage.stylesnap_history;
+    const entry = history.entries.find(e => e.id === record.id);
+    if (entry) {
+      entry.hasScreenshots = true;
+      await chrome.storage.local.set({ stylesnap_history: history });
+    }
+  }
+}
+
+export async function loadScreenshot(id: string): Promise<ScreenshotRecord | null> {
+  const db = await openStyleSnapDB();
+  return (await db.get("screenshots", id)) ?? null;
 }

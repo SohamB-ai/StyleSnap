@@ -217,7 +217,7 @@ export function scanStylesheets(): { cssVars: Record<string, string>; breakpoint
             }
           }
         }
-      } else if (rule instanceof CSSMediaRule) {
+      } else if (rule instanceof CSSMediaRule && rule.conditionText) {
         const matches = rule.conditionText.match(/\d+px/g);
         if (matches) {
           matches.forEach((m) => breakpointsSet.add(parseInt(m, 10)));
@@ -336,7 +336,13 @@ export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; 
 
   // Framework Detection
   let detectedFramework: FrameworkType = "vanilla";
-  if (tailwindClassHits > 20) detectedFramework = "tailwind";
+  
+  // Tailwind v4 uses specific css variables heavily and often doesn't need a build step in the same way
+  const hasTwV4Vars = Object.keys(cssVars).some(k => k.startsWith("--tw-") || k.startsWith("--spacing") || k.startsWith("--color-"));
+  const hasTwClass = tailwindClassHits > 20;
+
+  if (hasTwClass && hasTwV4Vars) detectedFramework = "tailwind-v4";
+  else if (hasTwClass) detectedFramework = "tailwind";
   else if (styledComponentHits > 5) detectedFramework = "styled-components";
   else if (emotionHits > 5) detectedFramework = "emotion";
   else if (Object.keys(cssVars).length > 5) detectedFramework = "vanilla";

@@ -4,7 +4,8 @@ import { MessageType } from "../shared/messages";
 import { Settings } from "../shared/types";
 import { handleExtractPage, handleExtractionComplete } from "./handlers/extraction";
 import { handleExportFile } from "./handlers/export";
-import { loadExtraction, deleteHistoryEntry, clearAllHistory } from "./services/db";
+import { handleScreenshotRequest } from "./handlers/screenshot";
+import { loadExtraction, deleteHistoryEntry, clearAllHistory, saveScreenshot } from "./services/db";
 
 // 1. Initialize default settings on installation
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -54,6 +55,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const tabId = message.payload?.tabId || sender.tab?.id;
       if (tabId) {
         handleExtractPage(tabId, message.payload?.options);
+      } else {
+        chrome.runtime.sendMessage({
+          type: MessageType.EXTRACTION_ERROR,
+          payload: { reason: "Target tab not found. Please click on a web tab and try again." }
+        }).catch(() => {});
       }
       break;
     }
@@ -79,6 +85,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     case MessageType.HISTORY_CLEAR: {
       clearAllHistory().then(() => {
+        sendResponse({ success: true });
+      });
+      return true;
+    }
+    case MessageType.CAPTURE_SCREENSHOT: {
+      return handleScreenshotRequest(message.payload, sendResponse);
+    }
+    case MessageType.STORE_SCREENSHOT: {
+      saveScreenshot(message.payload).then(() => {
         sendResponse({ success: true });
       });
       return true;

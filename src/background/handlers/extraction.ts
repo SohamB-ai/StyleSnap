@@ -35,13 +35,20 @@ function isRestrictedUrl(url: string): boolean {
   );
 }
 
+const RESTRICTED_MSG = "Cannot extract design from internal or restricted browser pages (e.g. chrome:// or Chrome Web Store). Please switch to a regular web page tab.";
+
 export async function handleExtractPage(tabId: number, options?: { domLimit?: number }): Promise<void> {
   const safeOptions = { domLimit: options?.domLimit ?? 2000 };
 
   try {
     const tab = await chrome.tabs.get(tabId).catch(() => null);
-    if (tab?.url && isRestrictedUrl(tab.url)) {
-      sendExtractionError("restricted");
+    if (!tab) {
+      sendExtractionError("Target tab no longer exists. Please select an active web tab.");
+      return;
+    }
+
+    if (tab.url && isRestrictedUrl(tab.url)) {
+      sendExtractionError(RESTRICTED_MSG);
       return;
     }
 
@@ -53,13 +60,12 @@ export async function handleExtractPage(tabId: number, options?: { domLimit?: nu
       },
       (_response) => {
         if (chrome.runtime.lastError) {
-          console.warn("Content script not found, injecting dynamically:", chrome.runtime.lastError.message);
+          console.warn("Content script not responding, injecting dynamically:", chrome.runtime.lastError.message);
           injectAndRetry(tabId, safeOptions);
         }
       }
     );
   } catch (error: any) {
-    // Synchronous throw (rare, but possible on invalid tabId)
     sendExtractionError(error.message || "Failed to trigger extraction on tab.");
   }
 }
@@ -67,18 +73,18 @@ export async function handleExtractPage(tabId: number, options?: { domLimit?: nu
 async function injectAndRetry(tabId: number, options: { domLimit: number }): Promise<void> {
   try {
     // 1. Check if the tab URL is injectable
-    const tab = await chrome.tabs.get(tabId);
-    const url = tab.url || "";
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    const url = tab?.url || "";
 
     if (isRestrictedUrl(url)) {
-      sendExtractionError("restricted");
+      sendExtractionError(RESTRICTED_MSG);
       return;
     }
 
     // 2. Resolve the content script filename from the manifest
     const scriptFile = getContentScriptFile();
     if (!scriptFile) {
-      sendExtractionError("Content script not found in manifest. Please reinstall the extension.");
+      sendExtractionError("Content script entry not found in extension manifest. Please reload the extension.");
       return;
     }
 
@@ -88,8 +94,10 @@ async function injectAndRetry(tabId: number, options: { domLimit: number }): Pro
       files: [scriptFile]
     });
 
-    // 4. Wait briefly for the script to register its message listener, then retry
-    setTimeout(() => {
+    // 4. Retry sending message up to 3 times to allow dynamic loader script to initialize
+    let attempts = 0;
+    const trySendMessage = () => {
+      attempts++;
       chrome.tabs.sendMessage(
         tabId,
         {
@@ -98,16 +106,21 @@ async function injectAndRetry(tabId: number, options: { domLimit: number }): Pro
         },
         (_response) => {
           if (chrome.runtime.lastError) {
-            sendExtractionError("Failed to communicate after script injection. Please refresh the page and try again.");
+            if (attempts < 3) {
+              setTimeout(trySendMessage, 300);
+            } else {
+              sendExtractionError("Failed to communicate with page after script injection. Please refresh the page and try again.");
+            }
           }
         }
       );
-    }, 300);
+    };
+
+    setTimeout(trySendMessage, 300);
   } catch (err: any) {
     const msg = err.message || "Script injection failed.";
-    // Common: "Cannot access a chrome:// URL" or permissions error
     if (msg.includes("Cannot access")) {
-      sendExtractionError("Cannot extract from this page. Navigate to a regular website and try again.");
+      sendExtractionError(RESTRICTED_MSG);
     } else {
       sendExtractionError(msg);
     }

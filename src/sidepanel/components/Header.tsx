@@ -5,6 +5,7 @@ import { MousePointer2, Settings as SettingsIcon, Github, MoreVertical } from "l
 import { useStore } from "../store";
 import { MessageType } from "../../shared/messages";
 import { StyleSnapLogoIcon } from "./Logo";
+import { getActiveTab } from "../utils/tab";
 
 export const Header: React.FC = () => {
   const [currentUrl, setCurrentUrl] = useState<string>("Active Tab");
@@ -16,13 +17,13 @@ export const Header: React.FC = () => {
   const setResult = useStore((s) => s.setResult);
 
   useEffect(() => {
-    chrome.tabs?.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.url) {
+    getActiveTab((tab) => {
+      if (tab?.url) {
         try {
-          const urlObj = new URL(tabs[0].url);
+          const urlObj = new URL(tab.url);
           setCurrentUrl(urlObj.hostname);
         } catch {
-          setCurrentUrl(tabs[0].url);
+          setCurrentUrl(tab.url);
         }
       }
     });
@@ -31,9 +32,9 @@ export const Header: React.FC = () => {
   const handleToggleInspector = () => {
     const nextState = !isInspecting;
     setInspecting(nextState);
-    chrome.tabs?.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.tabs.sendMessage(tabs[0].id, {
+    getActiveTab((tab) => {
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, {
           type: nextState ? MessageType.INSPECT_ACTIVATE : MessageType.INSPECT_DEACTIVATE
         });
       }

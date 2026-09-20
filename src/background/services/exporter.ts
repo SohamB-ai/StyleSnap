@@ -354,3 +354,40 @@ Paste these CSS variables into your global stylesheet (e.g. \`globals.css\` or \
   return skill;
 }
 
+// 5. Components.md Generator (V2)
+export function generateComponentsMD(result: ExtractionResult): string {
+  let md = `# Component Library — ${result.title}\n`;
+  md += `> Extracted by StyleSnap v${result.version}\n\n`;
+
+  if (!result.components || result.components.length === 0) {
+    return md + `*No specific component patterns detected with high confidence on this page.*\n`;
+  }
+
+  const highConfidence = result.components.filter(c => c.confidence >= 0.60);
+  const uncertain = result.components.filter(c => c.confidence >= 0.45 && c.confidence < 0.60);
+
+  if (highConfidence.length > 0) {
+    md += `## Detected Components\n\n`;
+    for (const c of highConfidence) {
+      md += `### ${c.label} (x${c.instanceCount})\n`;
+      md += `**Confidence:** ${(c.confidence * 100).toFixed(1)}%\n`;
+      md += `**Signals:** ${c.signals.map(s => s.type).join(", ")}\n\n`;
+      
+      md += `#### CSS\n\`\`\`css\n${c.selector} {\n${c.css}\n}\n\`\`\`\n\n`;
+      md += `#### HTML\n\`\`\`html\n${c.html}\n\`\`\`\n\n`;
+      md += `---\n\n`;
+    }
+  }
+
+  if (uncertain.length > 0) {
+    md += `## Uncertain Detections (Low Confidence)\n\n`;
+    for (const c of uncertain) {
+      md += `### ${c.label} (x${c.instanceCount})\n`;
+      md += `**Confidence:** ${(c.confidence * 100).toFixed(1)}%\n\n`;
+      md += `#### HTML\n\`\`\`html\n${c.html}\n\`\`\`\n\n`;
+      md += `---\n\n`;
+    }
+  }
+
+  return md;
+}

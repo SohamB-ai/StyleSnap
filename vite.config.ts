@@ -4,12 +4,7 @@ import { crx } from "@crxjs/vite-plugin";
 import manifest from "./manifest.config";
 
 export default defineConfig({
+  root: __dirname,
   plugins: [react(), crx({ manifest })],
-  build: {
-    rollupOptions: {
-      input: {
-        sidepanel: "src/sidepanel/index.html",
-      },
-    },
-  },
+
 });

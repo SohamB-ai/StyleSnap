@@ -5,6 +5,7 @@ import { MousePointer2, Code, FileCode } from "lucide-react";
 import { useStore } from "../store";
 import { CopyButton } from "./CopyButton";
 import { MessageType } from "../../shared/messages";
+import { getActiveTab } from "../utils/tab";
 
 export const ElementSelected: React.FC = () => {
   const inspectedElement = useStore((s) => s.inspectedElement);
@@ -16,9 +17,9 @@ export const ElementSelected: React.FC = () => {
   const handleInspectAgain = () => {
     setInspectedElement(null);
     setInspecting(true);
-    chrome.tabs?.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.tabs.sendMessage(tabs[0].id, { type: MessageType.INSPECT_ACTIVATE });
+    getActiveTab((tab) => {
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, { type: MessageType.INSPECT_ACTIVATE });
       }
     });
   };

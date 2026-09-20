@@ -20,11 +20,11 @@ export default defineManifest(async (env) => ({
     type: "module"
   },
   side_panel: {
-    default_path: "src/sidepanel/index.html"
+    default_path: "index.html"
   },
   action: {
     default_title: "StyleSnap",
-    default_popup: "src/sidepanel/index.html",
+    default_popup: "index.html",
     default_icon: {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",

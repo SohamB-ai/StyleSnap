@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { ExtractionResult, HistoryEntry, Settings } from "../shared/types";
 import { ElementSelectedPayload } from "../shared/messages";
 
-export type TabType = "tokens" | "assets" | "export" | "history";
+export type TabType = "tokens" | "components" | "layout" | "assets" | "ai-prompt" | "export" | "history";
 
 interface StyleSnapStore {
   activeTab: TabType;
@@ -18,6 +18,7 @@ interface StyleSnapStore {
   settingsOpen: boolean;
   historyEntries: HistoryEntry[];
   toast: { message: string; type: "success" | "error" } | null;
+  screenshotProgress: number; // 0-100
 
   // Actions
   setTab: (tab: TabType) => void;
@@ -32,6 +33,7 @@ interface StyleSnapStore {
   setHistory: (entries: HistoryEntry[]) => void;
   showToast: (message: string, type?: "success" | "error") => void;
   clearToast: () => void;
+  setScreenshotProgress: (pct: number) => void;
 }
 
 export const useStore = create<StyleSnapStore>((set) => ({
@@ -46,6 +48,7 @@ export const useStore = create<StyleSnapStore>((set) => ({
   settingsOpen: false,
   historyEntries: [],
   toast: null,
+  screenshotProgress: 0,
 
   setTab: (activeTab) => set({ activeTab, inspectedElement: null }),
   setResult: (result) => set({ result, isExtracting: false, activeTab: "tokens" }),
@@ -66,5 +69,6 @@ export const useStore = create<StyleSnapStore>((set) => ({
       set({ toast: null });
     }, 3000);
   },
-  clearToast: () => set({ toast: null })
+  clearToast: () => set({ toast: null }),
+  setScreenshotProgress: (pct) => set({ screenshotProgress: pct })
 }));

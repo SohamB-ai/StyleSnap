@@ -136,6 +136,92 @@ export interface DesignTokens {
   zIndex: ZIndexToken[];
 }
 
+// ── V2 Layout Structure ──────────────────────────────
+export interface LayoutStructure {
+  maxContentWidth: string;     // "1280px" | "90vw"
+  baseGrid: GridInfo;
+  sections: PageSection[];
+}
+
+export interface GridInfo {
+  type: "css-grid" | "flexbox" | "mixed" | "unknown";
+  columns?: string;   // "repeat(12, 1fr)"
+  gap?: string;
+  columnCount: number;
+}
+
+export type SectionLabel = "navigation" | "hero" | "features" | "testimonials" 
+  | "pricing" | "cta" | "footer" | "sidebar" | "content" | "gallery" 
+  | "faq" | "team" | "stats" | "unknown";
+
+export interface PageSection {
+  id: string;
+  label: SectionLabel;
+  tagName: string;
+  layoutType: "flex" | "grid" | "block" | "absolute" | "mixed";
+  flexDirection?: string;
+  flexWrap?: string;
+  gridCols?: string;
+  gap?: string;
+  padding: string;
+  backgroundColor: string;
+  minHeight: string;
+  order: number;
+  screenshotId?: string;
+}
+
+// ── V2 Component Detection ──────────────────────────
+export type ComponentLabel = "button" | "card" | "nav" | "header" | "footer" 
+  | "form" | "input" | "modal" | "dialog" | "badge" | "chip" | "avatar"
+  | "hero" | "table" | "list" | "dropdown" | "tab" | "unknown";
+
+export type SignalType = "semantic-html" | "aria-role" 
+  | "repeated-structure" | "class-heuristic";
+
+export interface DetectionSignal {
+  type: SignalType;
+  score: number;
+  detail: string;
+}
+
+export interface BoundingBox {
+  top: number; left: number; width: number; height: number;
+}
+
+export interface Component {
+  id: string;
+  label: ComponentLabel;
+  confidence: number;        // 0–1
+  instanceCount: number;
+  signals: DetectionSignal[];
+  html: string;              // outerHTML ≤4KB
+  css: string;               // scoped non-default CSS
+  selector: string;
+  boundingBox: BoundingBox;
+  hasChildren: boolean;
+  childCount: number;
+  isUncertain: boolean;      // true if 0.45–0.59
+  ariaRole?: string;
+  tagName: string;
+}
+
+// ── V2 Screenshot Record ─────────────────────────────
+export interface ScreenshotRecord {
+  id: string;
+  fullPage: Blob;
+  sections: SectionShot[];
+  createdAt: number;
+  totalSize: number;
+}
+
+export interface SectionShot {
+  sectionId: string;
+  label: string;
+  blob: Blob;
+  width: number;
+  height: number;
+}
+
 export interface AssetManifest {
   images: ImageAsset[];
   svgs: SVGAsset[];
@@ -183,6 +269,8 @@ export interface ExtractionResult {
   version: string;
   tokens: DesignTokens;
   assets: AssetManifest;
+  layout?: LayoutStructure;
+  components?: Component[];
   warnings: string[];
   confidence: number; // 0–1
   detectedFramework: FrameworkType;

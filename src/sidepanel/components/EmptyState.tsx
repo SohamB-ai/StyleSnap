@@ -4,23 +4,13 @@ import React from "react";
 import { Zap, Sparkles } from "lucide-react";
 import { StyleSnapLogoIcon } from "./Logo";
 import { useStore } from "../store";
-import { MessageType } from "../../shared/messages";
+import { triggerPageExtraction } from "../utils/tab";
 
 export const EmptyState: React.FC = () => {
   const isExtracting = useStore((s) => s.isExtracting);
-  const startExtraction = useStore((s) => s.startExtraction);
 
   const handleExtract = () => {
-    if (isExtracting) return;
-    startExtraction();
-    chrome.tabs?.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.runtime.sendMessage({
-          type: MessageType.EXTRACT_PAGE,
-          payload: { tabId: tabs[0].id, options: { domLimit: 2000 } }
-        });
-      }
-    });
+    triggerPageExtraction();
   };
 
   return (

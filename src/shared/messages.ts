@@ -15,6 +15,12 @@ export const enum MessageType {
   INSPECT_DEACTIVATE = "INSPECT_DEACTIVATE",
   ELEMENT_SELECTED = "ELEMENT_SELECTED",
 
+  // Screenshots [V2]
+  CAPTURE_SCREENSHOT = "CAPTURE_SCREENSHOT",
+  SCREENSHOT_RESPONSE = "SCREENSHOT_RESPONSE",
+  STITCH_TILES = "STITCH_TILES",
+  STORE_SCREENSHOT = "STORE_SCREENSHOT",
+
   // Export & storage
   EXPORT_FILE = "EXPORT_FILE",
   EXPORT_COMPLETE = "EXPORT_COMPLETE",
@@ -43,7 +49,16 @@ export type ExtractPagePayload = {
 export type ProgressPayload = {
   step: string;
   pct: number;
-  phase: 1 | 2 | 3;
+  phase: 1 | 2 | 3 | 4;
+};
+
+export type CaptureScreenshotPayload = { tabId: number };
+export type ScreenshotResponsePayload = { dataUrl: string };
+export type StitchTilesPayload = {
+  extractionId: string;
+  tiles: string[];
+  pageHeight: number;
+  viewportHeight: number;
 };
 
 export type ElementSelectedPayload = {

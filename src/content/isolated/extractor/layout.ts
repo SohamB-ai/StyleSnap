@@ -35,7 +35,7 @@ function computeLayout(el: Element): { layoutType: "flex" | "grid" | "block" | "
 
 function assignLabel(el: Element, tag: string): SectionLabel {
   const html = el.innerHTML.toLowerCase();
-  const className = el.className.toLowerCase();
+  const className = typeof el.className === "string" ? el.className.toLowerCase() : "";
   
   if (tag === "header") return "navigation";
   if (tag === "footer") return "footer";
@@ -142,6 +142,9 @@ export function extractLayout(): LayoutStructure {
     const tag = el.tagName.toLowerCase();
     const rect = getVisibleRect(el);
     
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    const scrollX = window.scrollX || window.pageXOffset || 0;
+    
     return {
       id: generateId(),
       label: assignLabel(el, tag),
@@ -154,7 +157,13 @@ export function extractLayout(): LayoutStructure {
       padding: layout.pad || "0px",
       backgroundColor: layout.bg || "transparent",
       minHeight: layout.minH || "0px",
-      order: idx
+      order: idx,
+      boundingRect: {
+        top: Math.round(rect.top + scrollY),
+        left: Math.round(rect.left + scrollX),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height)
+      }
     };
   });
 

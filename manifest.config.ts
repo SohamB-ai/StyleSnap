@@ -3,13 +3,14 @@ import { defineManifest } from "@crxjs/vite-plugin";
 export default defineManifest(async (env) => ({
   manifest_version: 3,
   name: "StyleSnap",
-  version: "1.0.0",
+  version: "2.0.0",
   minimum_chrome_version: "114",
   description: "Extract any website's design system in one click — tokens, components, assets, and AI prompts.",
   permissions: [
     "activeTab",
     "scripting",
     "storage",
+    "unlimitedStorage",
     "sidePanel",
     "tabs",
     "downloads"
@@ -23,8 +24,7 @@ export default defineManifest(async (env) => ({
     default_path: "index.html"
   },
   action: {
-    default_title: "StyleSnap",
-    default_popup: "index.html",
+    default_title: "Open StyleSnap",
     default_icon: {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",

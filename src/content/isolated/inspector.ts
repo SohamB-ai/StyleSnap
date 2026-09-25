@@ -1,6 +1,7 @@
 // Element Inspector On-Page Hover Overlay & Click Selector
 
 import { MessageType } from "../../shared/messages";
+import { sanitizeComponentHTML } from "./extractor/components";
 
 let overlayEl: HTMLDivElement | null = null;
 let isActive = false;
@@ -88,7 +89,7 @@ function handleClick(e: MouseEvent) {
 
   const css = extractRelevantCSS(target);
   const selector = generateCSSSelector(target);
-  const html = target.outerHTML.slice(0, 2000);
+  const html = sanitizeComponentHTML(target, 2000);
   const rect = target.getBoundingClientRect();
 
   chrome.runtime.sendMessage({
@@ -100,7 +101,7 @@ function handleClick(e: MouseEvent) {
       boundingBox: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
       selector
     }
-  });
+  }).catch(() => {});
 
   deactivateInspector();
 }

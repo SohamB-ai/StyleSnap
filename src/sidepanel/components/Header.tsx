@@ -34,9 +34,17 @@ export const Header: React.FC = () => {
     setInspecting(nextState);
     getActiveTab((tab) => {
       if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, {
-          type: nextState ? MessageType.INSPECT_ACTIVATE : MessageType.INSPECT_DEACTIVATE
-        });
+        chrome.tabs.sendMessage(
+          tab.id,
+          {
+            type: nextState ? MessageType.INSPECT_ACTIVATE : MessageType.INSPECT_DEACTIVATE
+          },
+          () => {
+            if (chrome.runtime?.lastError) {
+              // Target tab not responding or restricted page; ignore
+            }
+          }
+        );
       }
     });
   };
@@ -53,7 +61,7 @@ export const Header: React.FC = () => {
               StyleSnap
             </h1>
             <span className="text-[10px] text-secondary font-mono">
-              v1.0.0
+              v2.0.0
             </span>
           </div>
         </div>
@@ -103,8 +111,8 @@ export const Header: React.FC = () => {
                 onClick={() => { setTab("export"); setMenuOpen(false); }}
                 className="w-full px-3 py-1.5 text-left text-primary hover:bg-hover transition-colors flex items-center justify-between"
               >
-                <span>All Token Details</span>
-                <span className="text-[10px] text-muted">Raw CSS</span>
+                <span>Export & Downloads</span>
+                <span className="text-[10px] text-muted">ZIP, MD</span>
               </button>
               <button
                 onClick={() => { toggleSettings(); setMenuOpen(false); }}

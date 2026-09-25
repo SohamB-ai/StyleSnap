@@ -93,8 +93,97 @@ function getBestSelector(el: Element): string {
   return el.tagName.toLowerCase();
 }
 
+const IGNORED_TAGS = new Set([
+  "path", "g", "circle", "rect", "line", "polyline", "polygon", "ellipse",
+  "defs", "clippath", "mask", "pattern", "stop", "lineargradient", "radialgradient",
+  "text", "tspan", "use", "symbol", "marker",
+  "script", "style", "meta", "link", "noscript", "template", "head", "title",
+  "br", "hr", "wbr", "source", "track"
+]);
+
+export function sanitizeComponentHTML(el: Element, maxBytes = 4000): string {
+  try {
+    const clone = el.cloneNode(true) as Element;
+
+    // 1. Strip inner contents of all SVG elements so heavy paths never bloat or break HTML
+    if (clone.tagName.toLowerCase() === "svg") {
+      clone.innerHTML = "";
+      clone.removeAttribute("d");
+    }
+    const svgs = clone.querySelectorAll("svg");
+    svgs.forEach((s) => {
+      s.innerHTML = "";
+      s.removeAttribute("d");
+    });
+
+    // 2. Normalize <img> elements
+    if (clone.tagName.toLowerCase() === "img") {
+      clone.setAttribute("src", "...");
+      clone.removeAttribute("srcset");
+    }
+    const imgs = clone.querySelectorAll("img");
+    imgs.forEach((i) => {
+      i.setAttribute("src", "...");
+      i.removeAttribute("srcset");
+    });
+
+    // 3. Remove script, style, iframe nodes
+    clone.querySelectorAll("script, style, iframe, noscript").forEach((n) => n.remove());
+
+    // 4. Limit overly deep or wide child lists
+    if (clone.children.length > 8) {
+      const childrenArray = Array.from(clone.children);
+      const toRemove = childrenArray.slice(8);
+      toRemove.forEach((c) => c.remove());
+      const placeholder = document.createElement("div");
+      placeholder.textContent = `... (${toRemove.length} more elements)`;
+      clone.appendChild(placeholder);
+    }
+
+    // 5. Shorten lengthy text nodes
+    const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+    let textNode = walker.nextNode();
+    while (textNode) {
+      if (textNode.nodeValue && textNode.nodeValue.length > 150) {
+        textNode.nodeValue = textNode.nodeValue.substring(0, 150) + "...";
+      }
+      textNode = walker.nextNode();
+    }
+
+    let html = clone.outerHTML;
+
+    // 6. If still long, remove bulky data attributes rather than mid-string slicing
+    if (html.length > maxBytes) {
+      const allDescendants = [clone, ...Array.from(clone.querySelectorAll("*"))];
+      for (const d of allDescendants) {
+        const attrs = Array.from(d.attributes);
+        for (const attr of attrs) {
+          if (attr.name.startsWith("data-") || attr.value.length > 80) {
+            d.removeAttribute(attr.name);
+          }
+        }
+      }
+      html = clone.outerHTML;
+    }
+
+    // 7. If still exceeding maxBytes, collapse to safe closed tag
+    if (html.length > maxBytes) {
+      const tag = clone.tagName.toLowerCase();
+      const cls = typeof clone.className === "string" && clone.className.trim() ? ` class="${clone.className.trim()}"` : "";
+      html = `<${tag}${cls}>... (${clone.children.length} elements)</${tag}>`;
+    }
+
+    return html;
+  } catch {
+    const tag = el.tagName.toLowerCase();
+    return `<${tag}>...</${tag}>`;
+  }
+}
+
 export function detectComponents(domLimit = 1500): Component[] {
-  const elements = Array.from(document.querySelectorAll("*")).slice(0, domLimit);
+  const elements = Array.from(document.querySelectorAll("*"))
+    .filter((el) => !IGNORED_TAGS.has(el.tagName.toLowerCase()))
+    .slice(0, domLimit);
   
   // A. Find repeated structures
   const sigMap = new Map<string, Element[]>();
@@ -155,15 +244,7 @@ export function detectComponents(domLimit = 1500): Component[] {
     const key = `${cand.label}-${cand.sig}`;
     if (!finalComponentsMap.has(key)) {
       const rect = cand.el.getBoundingClientRect();
-      // Clean HTML
-      const clone = cand.el.cloneNode(true) as Element;
-      const imgs = clone.querySelectorAll("img, svg");
-      imgs.forEach(i => {
-        if (i.tagName.toLowerCase() === "img") i.setAttribute("src", "...");
-        if (i.tagName.toLowerCase() === "svg") i.innerHTML = "...";
-      });
-      let html = clone.outerHTML;
-      if (html.length > 4000) html = html.substring(0, 4000) + "...";
+      const html = sanitizeComponentHTML(cand.el, 4000);
 
       finalComponentsMap.set(key, {
         id: generateId(),
@@ -190,3 +271,4 @@ export function detectComponents(domLimit = 1500): Component[] {
 
   return Array.from(finalComponentsMap.values());
 }
+

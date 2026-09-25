@@ -94,7 +94,7 @@ async function injectAndRetry(tabId: number, options: { domLimit: number }): Pro
       files: [scriptFile]
     });
 
-    // 4. Retry sending message up to 3 times to allow dynamic loader script to initialize
+    // 4. Retry sending message up to 5 times to allow dynamic loader script to initialize
     let attempts = 0;
     const trySendMessage = () => {
       attempts++;
@@ -106,8 +106,8 @@ async function injectAndRetry(tabId: number, options: { domLimit: number }): Pro
         },
         (_response) => {
           if (chrome.runtime.lastError) {
-            if (attempts < 3) {
-              setTimeout(trySendMessage, 300);
+            if (attempts < 5) {
+              setTimeout(trySendMessage, 350);
             } else {
               sendExtractionError("Failed to communicate with page after script injection. Please refresh the page and try again.");
             }
@@ -116,7 +116,7 @@ async function injectAndRetry(tabId: number, options: { domLimit: number }): Pro
       );
     };
 
-    setTimeout(trySendMessage, 300);
+    setTimeout(trySendMessage, 350);
   } catch (err: any) {
     const msg = err.message || "Script injection failed.";
     if (msg.includes("Cannot access")) {
@@ -143,13 +143,13 @@ export async function handleExtractionComplete(result: ExtractionResult): Promis
     chrome.runtime.sendMessage({
       type: MessageType.EXTRACTION_COMPLETE,
       payload: result
-    });
+    }).catch(() => {});
   } catch (err: any) {
     console.error("Error saving extraction in background:", err);
     chrome.runtime.sendMessage({
       type: MessageType.EXTRACTION_COMPLETE,
       payload: result
-    });
+    }).catch(() => {});
   }
 }
 

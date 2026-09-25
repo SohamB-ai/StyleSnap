@@ -168,6 +168,7 @@ export interface PageSection {
   minHeight: string;
   order: number;
   screenshotId?: string;
+  boundingRect?: { top: number; left: number; width: number; height: number };
 }
 
 // ── V2 Component Detection ──────────────────────────
@@ -281,9 +282,11 @@ export type ExportFormat =
   | "skill-md"
   | "tokens-json"
   | "tailwind-config"
+  | "tailwind-v4-css"
   | "components-md"
   | "master-prompt"
-  | "assets-zip";
+  | "assets-zip"
+  | "full-zip";
 
 export type AITool = "cursor" | "claude-code" | "v0" | "bolt" | "lovable";
 
@@ -324,3 +327,16 @@ export interface ExtractionRecord {
   timestamp: number;
   result: ExtractionResult;
 }
+
+export interface ExtractionCheckpoint {
+  extractionId: string;
+  tabId: number;
+  url: string;
+  title: string;
+  phase: 1 | 2 | 3 | 4;
+  step: string;
+  pct: number;
+  partialResult: Partial<ExtractionResult>;
+  savedAt: number;
+}
+

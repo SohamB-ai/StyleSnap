@@ -1,25 +1,35 @@
-import { MessageType, CaptureScreenshotPayload } from "../../shared/messages";
+import { CaptureScreenshotPayload } from "../../shared/messages";
 
 export function handleScreenshotRequest(
-  payload: CaptureScreenshotPayload,
+  payload: CaptureScreenshotPayload & { windowId?: number },
   sendResponse: (response: any) => void
 ): boolean {
-  if (chrome.tabs.captureVisibleTab) {
-    chrome.tabs.captureVisibleTab(
-      payload.tabId > 0 ? payload.tabId : chrome.windows.WINDOW_ID_CURRENT,
-      { format: "png" },
-      (dataUrl) => {
+  if (chrome.tabs && chrome.tabs.captureVisibleTab) {
+    try {
+      const callback = (dataUrl?: string) => {
         if (chrome.runtime.lastError) {
-          console.error("Screenshot error:", chrome.runtime.lastError);
+          console.warn("Screenshot capture warning:", chrome.runtime.lastError.message);
           sendResponse({ dataUrl: "" });
         } else {
-          sendResponse({ dataUrl });
+          sendResponse({ dataUrl: dataUrl || "" });
         }
+      };
+
+      const winId = payload?.windowId;
+      if (typeof winId === "number" && winId > 0) {
+        chrome.tabs.captureVisibleTab(winId, { format: "png" }, callback);
+      } else {
+        chrome.tabs.captureVisibleTab({ format: "png" }, callback);
       }
-    );
-    return true; // Keep message channel open for async response
+      return true; // Keep message channel open for async response
+    } catch (err) {
+      console.warn("Screenshot capture exception:", err);
+      sendResponse({ dataUrl: "" });
+      return false;
+    }
   } else {
     sendResponse({ dataUrl: "" });
     return false;
   }
 }
+

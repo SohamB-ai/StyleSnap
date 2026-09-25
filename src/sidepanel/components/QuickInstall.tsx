@@ -18,7 +18,7 @@ export const QuickInstall: React.FC = () => {
     chrome.runtime.sendMessage({
       type: MessageType.EXPORT_FILE,
       payload: { format: "skill-md", extractionId: result.id }
-    });
+    }).catch(() => {});
 
     const skillContent = generateSkillMD(result);
     navigator.clipboard.writeText(skillContent).then(() => {

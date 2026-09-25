@@ -1,6 +1,6 @@
 // Tab Utility for Side Panel & Popup — Handles active tab resolution across side panel and browser windows
 
-import { MessageType } from "../../shared/messages";
+import { MessageType, isRestrictedUrl } from "../../shared/messages";
 import { useStore } from "../store";
 
 /**
@@ -17,16 +17,25 @@ export function getActiveTab(callback: (tab: chrome.tabs.Tab | null) => void): v
   }
 
   chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+    if (chrome.runtime?.lastError) {
+      // Query fallback
+    }
     let activeTab = tabs?.[0];
     if (activeTab?.id) {
       callback(activeTab);
     } else {
       chrome.tabs.query({ active: true, currentWindow: true }, (fallbackTabs) => {
+        if (chrome.runtime?.lastError) {
+          // Query fallback
+        }
         activeTab = fallbackTabs?.[0];
         if (activeTab?.id) {
           callback(activeTab);
         } else {
           chrome.tabs.query({ active: true }, (allTabs) => {
+            if (chrome.runtime?.lastError) {
+              // Ignore
+            }
             callback(allTabs?.[0] || null);
           });
         }
@@ -56,14 +65,25 @@ export function triggerPageExtraction(domLimit: number = 2000): void {
       return;
     }
 
+    if (tab.url && isRestrictedUrl(tab.url)) {
+      handleFail("Cannot extract internal browser pages (like chrome:// or Web Store). Please switch to a regular web page tab.");
+      return;
+    }
+
     chrome.runtime.sendMessage(
       {
         type: MessageType.EXTRACT_PAGE,
         payload: { tabId: tab.id, options: { domLimit } }
       },
-      (_response) => {
+      (response) => {
         if (chrome.runtime.lastError) {
-          handleFail("Could not communicate with background service worker. Please reload the extension.");
+          const errMsg = chrome.runtime.lastError.message || "";
+          console.warn("EXTRACT_PAGE response warning:", errMsg);
+          if (errMsg.includes("Could not establish connection")) {
+            handleFail("Could not communicate with background service worker. Please reload the extension.");
+          }
+        } else if (response && response.success === false) {
+          handleFail(response.reason || response.error || "Extraction could not be started.");
         }
       }
     );

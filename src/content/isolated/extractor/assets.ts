@@ -35,7 +35,22 @@ export function scanAssets(): AssetManifest {
       const rawH = parseInt(svg.getAttribute("height") || "24", 10);
       const width = svg.clientWidth || (isNaN(rawW) ? 24 : rawW);
       const height = svg.clientHeight || (isNaN(rawH) ? 24 : rawH);
-      const svgMarkup = new XMLSerializer().serializeToString(svg);
+
+      // Clone and sanitize paths to prevent malformed or dangling attributes
+      const clone = svg.cloneNode(true) as SVGSVGElement;
+      const paths = clone.querySelectorAll("path");
+      paths.forEach((p) => {
+        const d = p.getAttribute("d");
+        if (d) {
+          const trimmed = d.trim();
+          if (/[,\-\sa-zA-Z]$/.test(trimmed) && !/z$/i.test(trimmed)) {
+            const cleaned = trimmed.replace(/[,\-\s]+$/, "").replace(/[^0-9zZ\s]$/, "");
+            p.setAttribute("d", cleaned);
+          }
+        }
+      });
+
+      const svgMarkup = new XMLSerializer().serializeToString(clone);
 
       svgs.push({
         id: `svg-${i + 1}`,

@@ -6,6 +6,7 @@ import { handleExtractPage, handleExtractionComplete } from "./handlers/extracti
 import { handleExportFile } from "./handlers/export";
 import { handleScreenshotRequest } from "./handlers/screenshot";
 import { loadExtraction, deleteHistoryEntry, clearAllHistory, saveScreenshot } from "./services/db";
+import { saveCheckpoint, loadCheckpoint, clearCheckpoint } from "./services/checkpoint";
 
 // 1. Initialize default settings on installation
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -54,22 +55,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case MessageType.EXTRACT_PAGE: {
       const tabId = message.payload?.tabId || sender.tab?.id;
       if (tabId) {
-        handleExtractPage(tabId, message.payload?.options);
+        handleExtractPage(tabId, message.payload?.options)
+          .then(() => {
+            sendResponse({ success: true, status: "started" });
+          })
+          .catch((err) => {
+            sendResponse({ success: false, error: err?.message || "Extraction failed" });
+          });
       } else {
         chrome.runtime.sendMessage({
           type: MessageType.EXTRACTION_ERROR,
           payload: { reason: "Target tab not found. Please click on a web tab and try again." }
         }).catch(() => {});
+        sendResponse({ success: false, reason: "Target tab not found" });
       }
-      break;
+      return true; // Keep message channel open for async response
     }
     case MessageType.EXTRACTION_COMPLETE: {
-      handleExtractionComplete(message.payload);
-      break;
+      handleExtractionComplete(message.payload).then(() => {
+        sendResponse({ success: true });
+      }).catch(() => {
+        sendResponse({ success: false });
+      });
+      clearCheckpoint().catch(() => {});
+      return true;
     }
     case MessageType.EXPORT_FILE: {
-      handleExportFile(message.payload);
-      break;
+      handleExportFile(message.payload).then(() => {
+        sendResponse({ success: true });
+      }).catch((err) => {
+        sendResponse({ success: false, error: err?.message });
+      });
+      return true;
     }
     case MessageType.HISTORY_LOAD: {
       loadExtraction(message.payload.id).then((result) => {
@@ -90,10 +107,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
     case MessageType.CAPTURE_SCREENSHOT: {
-      return handleScreenshotRequest(message.payload, sendResponse);
+      const windowId = sender.tab?.windowId;
+      return handleScreenshotRequest({ ...message.payload, windowId }, sendResponse);
+    }
+    case MessageType.SCREENSHOT_TILE:
+    case MessageType.STITCH_TILES: {
+      // Delivered directly to UI via extension runtime messaging
+      break;
     }
     case MessageType.STORE_SCREENSHOT: {
       saveScreenshot(message.payload).then(() => {
+        sendResponse({ success: true });
+        chrome.runtime.sendMessage({
+          type: MessageType.SCREENSHOT_COMPLETE,
+          payload: { id: message.payload.id }
+        }).catch(() => {});
+      }).catch((err) => {
+        console.warn("Failed to store screenshot in background:", err);
+        sendResponse({ success: false });
+      });
+      return true;
+    }
+    case MessageType.CHECKPOINT_CHECK: {
+      if ((message as any).action === "save") {
+        saveCheckpoint(message.payload).then(() => {
+          sendResponse({ success: true });
+        });
+      } else {
+        loadCheckpoint().then((checkpoint) => {
+          sendResponse({ checkpoint });
+        });
+      }
+      return true;
+    }
+    case MessageType.CHECKPOINT_CLEAR: {
+      clearCheckpoint().then(() => {
         sendResponse({ success: true });
       });
       return true;

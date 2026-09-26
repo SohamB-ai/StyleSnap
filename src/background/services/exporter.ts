@@ -1,6 +1,13 @@
-// Export Format Generators (DESIGN.md, tokens.json, tailwind.config.js)
-
-import { ExtractionResult } from "../../shared/types";
+import {
+  ExtractionResult,
+  AnimationReport,
+  GSAPConfig,
+  LenisConfig,
+  ThreeConfig,
+  AOSConfig,
+  SplineConfig,
+  FramerMotionConfig
+} from "../../shared/types";
 
 function kebabCase(str: string): string {
   return str
@@ -267,58 +274,188 @@ export function generateDesignMD(result: ExtractionResult): string {
 
   // Animations & Motion [V3]
   if (result.animations) {
-    const report = result.animations;
-    md += `## 🎬 Animations & Motion Effects\n\n`;
-    md += `**Overall Accuracy:** Tier ${report.overallTier} (${
-      report.overallTier === 1
-        ? "High Accuracy — Library globals & exact configurations detected"
-        : report.overallTier === 2
-        ? "Heuristic — Motion components & variables identified"
-        : "Presence Only — CSS and DOM attribute scanning"
-    })\n\n`;
-    md += `> ${report.summary}\n\n`;
+    md += formatFullAnimationDocumentation(result.animations);
+  }
 
-    const detectedLibs = report.libraries.filter((l) => l.detected);
-    if (detectedLibs.length > 0) {
-      md += `### Detected Animation & 3D Libraries\n\n`;
-      detectedLibs.forEach((lib) => {
-        md += `#### ${lib.library.toUpperCase()}${lib.version ? ` (${lib.version})` : ""}\n`;
-        md += `- **Status**: Active (Tier ${lib.tier})\n`;
-        md += `- **Details**: ${lib.description}\n`;
-        if (lib.elementCount) {
-          md += `- **Animated Elements**: ${lib.elementCount}\n`;
-        }
-        if (lib.library === "gsap-scrolltrigger" && lib.config) {
-          const cfg = lib.config as any;
-          if (cfg.triggers?.length) {
-            md += `- **ScrollTrigger Instances:**\n`;
-            cfg.triggers.slice(0, 10).forEach((t: any) => {
-              md += `  - \`${t.trigger}\`: start="${t.start}", end="${t.end}"${
-                t.scrub ? ", scrub" : ""
-              }${t.pin ? ", pin" : ""}\n`;
-            });
-          }
-        }
-        md += `\n`;
-      });
-    }
+  return md;
+}
 
-    if (report.hasWebGL || (report.css3dTransforms && report.css3dTransforms.length > 0)) {
-      md += `### 3D & WebGL Capabilities\n\n`;
-      if (report.webglDetails) {
-        md += `- **WebGL Version**: WebGL ${report.webglDetails.webglVersion}\n`;
-        md += `- **Canvas Count**: ${report.webglDetails.canvasCount}\n`;
-        if (report.webglDetails.renderer) {
-          md += `- **GPU Renderer**: ${report.webglDetails.renderer}\n`;
-        }
-      }
-      if (report.css3dTransforms && report.css3dTransforms.length > 0) {
-        md += `- **CSS 3D Transforms**: ${report.css3dTransforms.length} elements utilizing perspective / preserve-3d\n`;
-      }
-      md += `\n`;
+export function formatFullAnimationDocumentation(report: AnimationReport): string {
+  let doc = `## 🎬 Animations, Motion & 3D Architecture\n\n`;
+  doc += `**Overall Accuracy:** Tier ${report.overallTier} (${
+    report.overallTier === 1
+      ? "High Accuracy — Runtime library globals & exact configurations detected"
+      : report.overallTier === 2
+      ? "Heuristic — Motion components, custom properties & variables identified"
+      : "Presence Only — CSS computed styles & DOM attribute scanning"
+  })\n\n`;
+  doc += `> **Detected Summary:** ${report.summary}\n\n`;
+
+  const detected = report.libraries.filter((l) => l.detected);
+
+  // Recommended npm packages
+  const npmPkgs: string[] = [];
+  if (detected.some((l) => l.library === "lenis")) npmPkgs.push("lenis");
+  if (detected.some((l) => l.library === "gsap" || l.library === "gsap-scrolltrigger")) npmPkgs.push("gsap");
+  if (detected.some((l) => l.library === "three-js")) npmPkgs.push("three", "@types/three");
+  if (detected.some((l) => l.library === "aos")) npmPkgs.push("aos", "@types/aos");
+  if (detected.some((l) => l.library === "framer-motion")) npmPkgs.push("framer-motion");
+  if (detected.some((l) => l.library === "locomotive-scroll")) npmPkgs.push("locomotive-scroll");
+
+  if (npmPkgs.length > 0) {
+    doc += `### Recommended Package Installation\n\`\`\`bash\nnpm install ${npmPkgs.join(" ")}\n# or\npnpm add ${npmPkgs.join(" ")}\n\`\`\`\n\n`;
+  }
+
+  // 1. Lenis Smooth Scroll
+  const lenisLib = detected.find((l) => l.library === "lenis");
+  if (lenisLib) {
+    const cfg = lenisLib.config as LenisConfig | undefined;
+    doc += `### 🌊 Lenis Smooth Scroll (${lenisLib.version || "Active"})\n`;
+    doc += `- **Status**: Active (Tier ${lenisLib.tier})\n`;
+    if (cfg) {
+      doc += `- **Duration**: ${cfg.duration}s\n`;
+      doc += `- **Orientation**: ${cfg.orientation}\n`;
+      doc += `- **Smooth Wheel**: ${cfg.smoothWheel ? "Enabled" : "Disabled"}\n`;
+      doc += `- **Infinite Scroll**: ${cfg.infinite ? "Enabled" : "Disabled"}\n`;
+      doc += `- **Easing Curve**: \`${cfg.easing}\`\n\n`;
+      doc += `**Drop-in Lenis Implementation Recipe:**\n`;
+      doc += `\`\`\`typescript\nimport Lenis from "lenis";\n\nconst lenis = new Lenis({\n  duration: ${cfg.duration},\n  orientation: "${cfg.orientation}",\n  smoothWheel: ${cfg.smoothWheel},\n  infinite: ${cfg.infinite},\n});\n\nfunction raf(time: number) {\n  lenis.raf(time);\n  requestAnimationFrame(raf);\n}\nrequestAnimationFrame(raf);\n\`\`\`\n\n`;
+    } else {
+      doc += `- ${lenisLib.description}\n\n`;
     }
   }
 
+  // 2. Three.js & WebGL
+  const threeLib = detected.find((l) => l.library === "three-js");
+  if (threeLib || report.hasWebGL) {
+    const cfg = threeLib?.config as ThreeConfig | undefined;
+    const webgl = report.webglDetails;
+    doc += `### 🧊 Three.js & WebGL 3D Canvas\n`;
+    if (threeLib) doc += `- **Three.js Revision**: \`${threeLib.version || cfg?.revision || "Detected"}\` (Tier ${threeLib.tier})\n`;
+    if (webgl) {
+      doc += `- **WebGL Version**: WebGL ${webgl.webglVersion}\n`;
+      doc += `- **Canvas Count**: ${webgl.canvasCount}\n`;
+      if (webgl.renderer) doc += `- **GPU Renderer**: \`${webgl.renderer}\`\n`;
+      if (webgl.vendor) doc += `- **GPU Vendor**: \`${webgl.vendor}\`\n`;
+    }
+    doc += `\n**Three.js Canvas Initialization Recipe:**\n`;
+    doc += `\`\`\`typescript\nimport * as THREE from "three";\n\nconst scene = new THREE.Scene();\nconst camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);\nconst renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });\nrenderer.setSize(window.innerWidth, window.innerHeight);\ndocument.getElementById("canvas-container")?.appendChild(renderer.domElement);\n\nfunction animate() {\n  requestAnimationFrame(animate);\n  renderer.render(scene, camera);\n}\nanimate();\n\`\`\`\n\n`;
+  }
+
+  // 3. Spline 3D
+  const splineLib = detected.find((l) => l.library === "spline");
+  if (splineLib) {
+    const cfg = splineLib.config as SplineConfig | undefined;
+    doc += `### 🪐 Spline 3D Viewport\n`;
+    doc += `- **Status**: Active (${cfg?.viewerCount || 1} viewer embedded)\n`;
+    if (cfg?.urls && cfg.urls.length > 0) {
+      doc += `- **Scene URLs**:\n${cfg.urls.map((u) => `  - [${u}](${u})`).join("\n")}\n\n`;
+      doc += `**Spline Embed Snippet:**\n`;
+      doc += `\`\`\`html\n<script type="module" src="https://unpkg.com/@splinetool/viewer@latest/build/spline-viewer.js"></script>\n<spline-viewer url="${cfg.urls[0]}"></spline-viewer>\n\`\`\`\n\n`;
+    }
+  }
+
+  // 4. GSAP & ScrollTrigger
+  const gsapLib = detected.find((l) => l.library === "gsap" || l.library === "gsap-scrolltrigger");
+  if (gsapLib) {
+    const cfg = gsapLib.config as GSAPConfig | undefined;
+    doc += `### ⚡ GSAP & ScrollTrigger (${gsapLib.version || "Active"})\n`;
+    doc += `- **Status**: Active (Tier ${gsapLib.tier})\n`;
+    doc += `- **Details**: ${gsapLib.description}\n`;
+    if (cfg?.triggers && cfg.triggers.length > 0) {
+      doc += `\n**Extracted ScrollTrigger Instances (${cfg.triggers.length}):**\n\n`;
+      doc += `| # | Trigger Selector | Start | End | Scrub | Pin |\n`;
+      doc += `|---|---|---|---|---|---|\n`;
+      cfg.triggers.slice(0, 15).forEach((t, i) => {
+        doc += `| ${i + 1} | \`${t.trigger}\` | \`${t.start}\` | \`${t.end}\` | ${t.scrub ? `✅ \`${t.scrub}\`` : "❌"} | ${t.pin ? "✅ Yes" : "❌"} |\n`;
+      });
+      doc += `\n**GSAP ScrollTrigger Implementation Recipe:**\n`;
+      doc += `\`\`\`typescript\nimport gsap from "gsap";\nimport { ScrollTrigger } from "gsap/ScrollTrigger";\ngsap.registerPlugin(ScrollTrigger);\n\n// Replicated ScrollTrigger instances:\n`;
+      cfg.triggers.slice(0, 5).forEach((t) => {
+        doc += `gsap.to("${t.trigger}", {\n  scrollTrigger: {\n    trigger: "${t.trigger}",\n    start: "${t.start}",\n    end: "${t.end}",\n    scrub: ${t.scrub},\n    pin: ${t.pin},\n  },\n});\n`;
+      });
+      doc += `\`\`\`\n\n`;
+    }
+  }
+
+  // 5. AOS (Animate on Scroll)
+  const aosLib = detected.find((l) => l.library === "aos");
+  if (aosLib) {
+    const cfg = aosLib.config as AOSConfig | undefined;
+    doc += `### 🎭 AOS (Animate on Scroll)\n`;
+    doc += `- **Status**: Active (${aosLib.elementCount || 0} elements)\n`;
+    if (cfg) {
+      doc += `- **Default Duration**: ${cfg.options?.duration}ms\n`;
+      doc += `- **Easing**: \`${cfg.options?.easing}\`\n`;
+      doc += `- **Offset**: ${cfg.options?.offset}px\n`;
+      doc += `- **Trigger Once**: ${cfg.options?.once ? "Yes" : "No"}\n\n`;
+      if (cfg.elements && cfg.elements.length > 0) {
+        doc += `**Animated Elements:**\n`;
+        doc += `| Animation Type | Element Count | Target Selector |\n`;
+        doc += `|---|---|---|\n`;
+        cfg.elements.forEach((el) => {
+          doc += `| \`data-aos="${el.animation}"\` | ${el.count} | \`${el.selector}\` |\n`;
+        });
+        doc += `\n`;
+      }
+      doc += `**AOS Initialization Recipe:**\n`;
+      doc += `\`\`\`typescript\nimport AOS from "aos";\nimport "aos/dist/aos.css";\n\nAOS.init({\n  duration: ${cfg.options?.duration || 400},\n  easing: "${cfg.options?.easing || "ease"}",\n  offset: ${cfg.options?.offset || 120},\n  once: ${Boolean(cfg.options?.once)},\n});\n\`\`\`\n\n`;
+    }
+  }
+
+  // 6. Framer Motion
+  const framerLib = detected.find((l) => l.library === "framer-motion");
+  if (framerLib) {
+    const cfg = framerLib.config as FramerMotionConfig | undefined;
+    doc += `### 🪄 Framer Motion\n`;
+    doc += `- **Status**: Active (${framerLib.elementCount || 0} motion elements)\n`;
+    if (cfg) {
+      doc += `- **Layout Animations**: ${cfg.hasLayoutAnimations ? "Detected" : "None"}\n`;
+      if (cfg.framerVariables && cfg.framerVariables.length > 0) {
+        doc += `- **CSS Motion Variables**: \`${cfg.framerVariables.slice(0, 8).join("`, `")}\`\n`;
+      }
+      doc += `\n**Framer Motion Component Pattern:**\n`;
+      doc += `\`\`\`tsx\nimport { motion } from "framer-motion";\n\nexport const MotionCard = ({ children }: { children: React.ReactNode }) => (\n  <motion.div\n    initial={{ opacity: 0, y: 24 }}\n    whileInView={{ opacity: 1, y: 0 }}\n    viewport={{ once: true }}\n    transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}\n  >\n    {children}\n  </motion.div>\n);\n\`\`\`\n\n`;
+    }
+  }
+
+  // 7. CSS 3D Transforms
+  if (report.css3dTransforms && report.css3dTransforms.length > 0) {
+    doc += `### 📐 CSS 3D Transforms (${report.css3dTransforms.length} elements)\n`;
+    doc += `| Element Selector | Perspective | Transform Style | Transform |\n`;
+    doc += `|---|---|---|---|\n`;
+    report.css3dTransforms.slice(0, 10).forEach((t) => {
+      doc += `| \`${t.selector}\` | ${t.perspective || "—"} | ${t.transformStyle || "—"} | \`${t.transform || "—"}\` |\n`;
+    });
+    doc += `\n`;
+  }
+
+  // 8. Vanilla CSS Animations & Keyframes
+  if (report.vanillaAnimations) {
+    const v = report.vanillaAnimations;
+    doc += `### ⚙️ Native CSS Animations & Keyframes\n`;
+    doc += `- **Active CSS Animations**: ${v.cssAnimationCount}\n`;
+    doc += `- **Active CSS Transitions**: ${v.cssTransitionCount}\n`;
+    doc += `- **IntersectionObserver Triggers**: ${v.intersectionObserverDetected ? "Detected" : "None"}\n`;
+    if (v.keyframeNames && v.keyframeNames.length > 0) {
+      doc += `- **Declared @keyframes**: \`@${v.keyframeNames.join("`, `@")}\`\n`;
+    }
+    doc += `\n`;
+  }
+
+  return doc;
+}
+
+export function generateMotionMD(result: ExtractionResult): string {
+  let md = `# MOTION & ANIMATION SPECIFICATION — ${result.title}\n`;
+  md += `> Source: ${result.url} | Extracted by StyleSnap v${result.version}\n`;
+  md += `> Timestamp: ${new Date(result.timestamp).toISOString()}\n\n`;
+
+  if (!result.animations) {
+    return md + `*No dynamic motion libraries or custom scroll effects detected on this page.*\n`;
+  }
+
+  md += formatFullAnimationDocumentation(result.animations);
   return md;
 }
 
@@ -517,21 +654,7 @@ Paste these CSS variables into your global stylesheet (e.g. \`globals.css\` or \
 
   // Animation Architecture [V3]
   if (result.animations) {
-    const report = result.animations;
-    skill += `## 8. Animation & Motion Architecture (Tier ${report.overallTier})\n`;
-    skill += `> ${report.summary}\n\n`;
-
-    const detected = report.libraries.filter((l) => l.detected);
-    if (detected.length > 0) {
-      detected.forEach((lib) => {
-        skill += `- **${lib.library.toUpperCase()}**: ${lib.description}\n`;
-      });
-      skill += `\n`;
-    }
-
-    if (report.vanillaAnimations.keyframeNames.length > 0) {
-      skill += `- **Keyframes Replicated**: \`${report.vanillaAnimations.keyframeNames.slice(0, 10).join("`, `")}\`\n\n`;
-    }
+    skill += formatFullAnimationDocumentation(result.animations);
   }
 
   // Guidelines for AI Agents

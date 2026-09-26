@@ -14,11 +14,11 @@ import {
   Eye
 } from "lucide-react";
 import { useStore } from "../store";
-import { generateDesignMD, generateSkillMD } from "../../background/services/exporter";
+import { generateDesignMD, generateSkillMD, generateMotionMD } from "../../background/services/exporter";
 import { MessageType } from "../../shared/messages";
 
 interface DesignMDPreviewProps {
-  initialFormat?: "design-md" | "skill-md";
+  initialFormat?: "design-md" | "skill-md" | "motion-md";
   defaultOpen?: boolean;
 }
 
@@ -237,7 +237,7 @@ export const DesignMDPreview: React.FC<DesignMDPreviewProps> = ({
   const result = useStore((s) => s.result);
   const showToast = useStore((s) => s.showToast);
 
-  const [activeDoc, setActiveDoc] = useState<"design-md" | "skill-md">(initialFormat);
+  const [activeDoc, setActiveDoc] = useState<"design-md" | "skill-md" | "motion-md">(initialFormat);
   const [viewMode, setViewMode] = useState<"formatted" | "raw">("formatted");
   const [isOpen, setIsOpen] = useState<boolean>(defaultOpen);
   const [isExpandedHeight, setIsExpandedHeight] = useState<boolean>(false);
@@ -247,7 +247,9 @@ export const DesignMDPreview: React.FC<DesignMDPreviewProps> = ({
 
   const markdownText = useMemo(() => {
     if (!result) return "";
-    return activeDoc === "design-md" ? generateDesignMD(result) : generateSkillMD(result);
+    if (activeDoc === "design-md") return generateDesignMD(result);
+    if (activeDoc === "skill-md") return generateSkillMD(result);
+    return generateMotionMD(result);
   }, [result, activeDoc]);
 
   const blocks = useMemo(() => {
@@ -277,7 +279,8 @@ export const DesignMDPreview: React.FC<DesignMDPreviewProps> = ({
     if (!markdownText) return;
     navigator.clipboard.writeText(markdownText).then(() => {
       setCopiedAll(true);
-      showToast(`Copied ${activeDoc === "design-md" ? "DESIGN.md" : "SKILL.md"} to clipboard!`, "success");
+      const label = activeDoc === "design-md" ? "DESIGN.md" : activeDoc === "skill-md" ? "SKILL.md" : "MOTION.md";
+      showToast(`Copied ${label} to clipboard!`, "success");
       setTimeout(() => setCopiedAll(false), 2000);
     });
   };
@@ -298,7 +301,7 @@ export const DesignMDPreview: React.FC<DesignMDPreviewProps> = ({
     }).catch(() => {});
 
     // 2. Direct browser fallback download
-    const filename = activeDoc === "design-md" ? "DESIGN.md" : "SKILL.md";
+    const filename = activeDoc === "design-md" ? "DESIGN.md" : activeDoc === "skill-md" ? "SKILL.md" : "MOTION.md";
     const blob = new Blob([markdownText], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -342,7 +345,7 @@ export const DesignMDPreview: React.FC<DesignMDPreviewProps> = ({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="font-bold text-xs text-white truncate tracking-tight">
-                {activeDoc === "design-md" ? "DESIGN.md" : "SKILL.md"} Preview
+                {activeDoc === "design-md" ? "DESIGN.md" : activeDoc === "skill-md" ? "SKILL.md" : "MOTION.md"} Preview
               </span>
               <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-800 border border-zinc-700/60 text-emerald-400 font-semibold">
                 Live
@@ -384,6 +387,19 @@ export const DesignMDPreview: React.FC<DesignMDPreviewProps> = ({
             >
               SKILL.md
             </button>
+            {result.animations && (
+              <button
+                onClick={() => setActiveDoc("motion-md")}
+                className={`px-2 py-0.5 rounded font-mono font-medium transition-all ${
+                  activeDoc === "motion-md"
+                    ? "bg-white text-black shadow-xs font-semibold"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+                title="Preview MOTION.md"
+              >
+                MOTION.md
+              </button>
+            )}
           </div>
 
           {/* Collapse / Expand Toggle */}

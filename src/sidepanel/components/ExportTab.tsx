@@ -190,6 +190,35 @@ export const ExportTab: React.FC = () => {
         </div>
       </div>
 
+      {/* Motion & Scroll Specification Card [V3] */}
+      {result.animations && (
+        <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 hover:border-indigo-500/60 rounded-md flex items-center justify-between gap-2 transition-all">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-md bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+              <Sparkles className="w-4 h-4 text-indigo-400" />
+            </div>
+            <div>
+              <div className="font-bold text-xs text-primary flex items-center gap-1.5">
+                <span>MOTION.md</span>
+                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-400 font-semibold uppercase">
+                  Tier {result.animations.overallTier}
+                </span>
+              </div>
+              <div className="text-[9.5px] text-secondary">
+                Lenis, GSAP, Three.js, WebGL & Scroll Architecture Spec
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => handleExport("motion-md")}
+            className="py-1 px-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] font-semibold flex items-center justify-center gap-1 transition-all active:scale-[0.98] shadow-2xs shrink-0"
+          >
+            <Download className="w-3 h-3" />
+            <span>Download</span>
+          </button>
+        </div>
+      )}
+
       {/* Quick Install Section */}
       <QuickInstall />
 

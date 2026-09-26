@@ -295,13 +295,36 @@ async function runTests() {
   const bundle = await import(bundleUrl);
   console.log(`[Test 1] Bundled module (${promptEngineFile}) loaded successfully.`);
 
-  // 1. Check exported functions exist
-  assert.ok(bundle.b, "generateDesignMD export exists");
-  assert.ok(bundle.c, "generateMasterPrompt export exists");
-  assert.ok(bundle.k, "generateTokensJSON export exists");
+  // Dynamically resolve bundle exports
+  let generateTokensJSON, generateDesignMD, generateMasterPrompt, generateMotionMD;
+  for (const [key, fn] of Object.entries(bundle)) {
+    if (typeof fn !== "function") continue;
+    try {
+      const res = fn(mockResult, "cursor");
+      if (res && typeof res.catch === "function") {
+        res.catch(() => {});
+        continue;
+      }
+      if (typeof res === "string") {
+        if (res.includes(".cursorrules") || res.includes("Cursor AI")) {
+          generateMasterPrompt = fn;
+        } else if (res.includes("# MOTION & ANIMATION SPECIFICATION")) {
+          generateMotionMD = fn;
+        } else if (res.includes("# DESIGN SYSTEM")) {
+          generateDesignMD = fn;
+        } else if (res.startsWith("{") && res.includes('"$metadata"')) {
+          generateTokensJSON = fn;
+        }
+      }
+    } catch (e) {}
+  }
+
+  assert.ok(generateDesignMD, "generateDesignMD export resolved");
+  assert.ok(generateMasterPrompt, "generateMasterPrompt export resolved");
+  assert.ok(generateTokensJSON, "generateTokensJSON export resolved");
 
   // 2. Test generateTokensJSON with V3 Animation Tokens
-  const tokensJsonStr = bundle.k(mockResult);
+  const tokensJsonStr = generateTokensJSON(mockResult);
   assert.ok(tokensJsonStr, "tokens.json is generated");
   const parsedDtcg = JSON.parse(tokensJsonStr);
   assert.strictEqual(parsedDtcg.$metadata.dtcgVersion, "2025.10");
@@ -312,21 +335,36 @@ async function runTests() {
   console.log("✓ Test 2 PASSED: tokens.json conforms to DTCG standard with animation token group.");
 
   // 3. Test generateDesignMD with V3 Animation Section
-  const designMD = bundle.b(mockResult);
+  const designMD = generateDesignMD(mockResult);
   assert.ok(designMD.includes("# DESIGN SYSTEM — Example Studio Design System"), "DESIGN.md has title");
   assert.ok(designMD.includes("Page Layout & Section Structure"), "DESIGN.md has Layout section");
   assert.ok(designMD.includes("Component Library"), "DESIGN.md has Component Library");
   assert.ok(designMD.includes("Z-Index Elevation"), "DESIGN.md has Z-Index section");
   assert.ok(designMD.includes("Colour Palette"), "DESIGN.md has Colour Palette");
-  assert.ok(designMD.includes("🎬 Animations & Motion Effects"), "DESIGN.md has V3 Animations section");
-  assert.ok(designMD.includes("GSAP-SCROLLTRIGGER"), "DESIGN.md details GSAP ScrollTrigger");
-  assert.ok(designMD.includes("3D & WebGL Capabilities"), "DESIGN.md details WebGL capabilities");
+  assert.ok(
+    designMD.includes("🎬 Animations, Motion & 3D Architecture") || designMD.includes("🎬 Animations & Motion Effects"),
+    "DESIGN.md has V3 Animations section"
+  );
+  assert.ok(
+    designMD.includes("GSAP & ScrollTrigger") || designMD.includes("GSAP-SCROLLTRIGGER"),
+    "DESIGN.md details GSAP ScrollTrigger"
+  );
+  assert.ok(
+    designMD.includes("Three.js & WebGL 3D Canvas") || designMD.includes("3D & WebGL Capabilities"),
+    "DESIGN.md details WebGL capabilities"
+  );
   console.log("✓ Test 3 PASSED: DESIGN.md contains all V3 animation, motion & WebGL sections.");
+
+  if (generateMotionMD) {
+    const motionMD = generateMotionMD(mockResult);
+    assert.ok(motionMD.includes("MOTION & ANIMATION SPECIFICATION"), "MOTION.md has title");
+    console.log("✓ Test: MOTION.md generated successfully with full scroll & 3D specifications.");
+  }
 
   // 4. Test generateMasterPrompt across all 5 AI tools with Animation instructions
   const tools = ["cursor", "claude-code", "v0", "bolt", "lovable"];
   for (const tool of tools) {
-    const prompt = bundle.c(mockResult, tool);
+    const prompt = generateMasterPrompt(mockResult, tool);
     assert.ok(prompt && prompt.length > 500, `Prompt for ${tool} is non-empty`);
     assert.ok(
       prompt.includes("Motion, Animations & 3D") || prompt.includes("Animations & Motion Effects"),

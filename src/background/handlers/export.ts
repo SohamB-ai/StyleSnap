@@ -9,7 +9,8 @@ import {
   generateSkillMD,
   generateTailwindConfig,
   generateTailwindV4CSS,
-  generateComponentsMD
+  generateComponentsMD,
+  generateMotionMD
 } from "../services/exporter";
 import { generateMasterPrompt, AITool } from "../services/promptEngine";
 
@@ -69,6 +70,11 @@ export async function handleExportFile(payload: ExportFilePayload): Promise<void
     case "components-md":
       content = generateComponentsMD(result);
       filename = `components-${originSlug}-${dateSlug}.md`;
+      mimeType = "text/markdown";
+      break;
+    case "motion-md":
+      content = generateMotionMD(result);
+      filename = `MOTION-${originSlug}-${dateSlug}.md`;
       mimeType = "text/markdown";
       break;
     case "master-prompt":
@@ -153,6 +159,9 @@ async function exportFullZip(result: any, originSlug: string, dateSlug: string):
   zip.file("tokens.json", generateTokensJSON(result));
   zip.file("tailwind.config.js", generateTailwindConfig(result));
   zip.file("theme.css", generateTailwindV4CSS(result));
+  if (result.animations) {
+    zip.file("MOTION.md", generateMotionMD(result));
+  }
 
   // 2. Component Library (if present)
   if (result.components && result.components.length > 0) {

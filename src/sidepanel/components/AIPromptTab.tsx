@@ -9,11 +9,11 @@ import { generateDesignMD } from "../../background/services/exporter";
 import { TokensTab } from "./TokensTab";
 
 const AI_TOOLS: { id: AITool; name: string; tag: string }[] = [
-  { id: "cursor", name: "Cursor AI", tag: "~5,000 tokens" },
-  { id: "claude-code", name: "Claude Code", tag: "~7,000 tokens" },
+  { id: "cursor", name: "Cursor AI", tag: "~5,500 tokens" },
+  { id: "claude-code", name: "Claude Code", tag: "~7,500 tokens" },
   { id: "v0", name: "v0 by Vercel", tag: "~4,000 tokens" },
-  { id: "bolt", name: "Bolt.new", tag: "~4,500 tokens" },
-  { id: "lovable", name: "Lovable", tag: "~3,000 tokens" }
+  { id: "bolt", name: "Bolt.new", tag: "~5,000 tokens" },
+  { id: "lovable", name: "Lovable", tag: "~3,200 tokens" }
 ];
 
 export const AIPromptTab: React.FC = () => {

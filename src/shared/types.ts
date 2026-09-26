@@ -288,7 +288,8 @@ export type ExportFormat =
   | "components-md"
   | "master-prompt"
   | "assets-zip"
-  | "full-zip";
+  | "full-zip"
+  | "motion-md";
 
 export type AITool = "cursor" | "claude-code" | "v0" | "bolt" | "lovable";
 

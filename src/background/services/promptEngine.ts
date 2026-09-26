@@ -1,7 +1,18 @@
 // V2 Multi-Agent Prompt Engine
 // Tailored prompt generators for Cursor, Claude Code, v0 by Vercel, Bolt.new, and Lovable
 
-import { ExtractionResult, Component, PageSection, ColorToken } from "../../shared/types";
+import {
+  ExtractionResult,
+  Component,
+  PageSection,
+  ColorToken,
+  GSAPConfig,
+  LenisConfig,
+  ThreeConfig,
+  AOSConfig,
+  SplineConfig,
+  FramerMotionConfig
+} from "../../shared/types";
 import { generateDesignMD, generateTailwindConfig, generateTailwindV4CSS } from "./exporter";
 
 // Helper to estimate tokens (rough estimate: 1 token ≈ 4 characters)
@@ -71,34 +82,102 @@ function formatAnimationPromptSection(result: ExtractionResult): string {
   if (!result.animations) return "";
   const report = result.animations;
   const detected = report.libraries.filter((l) => l.detected);
-  if (detected.length === 0 && !report.hasWebGL && report.vanillaAnimations.cssAnimationCount === 0) {
+  if (
+    detected.length === 0 &&
+    !report.hasWebGL &&
+    report.vanillaAnimations.cssAnimationCount === 0 &&
+    (!report.css3dTransforms || report.css3dTransforms.length === 0)
+  ) {
     return "";
   }
 
-  let text = `\n### 🎬 Motion, Animations & 3D Effects (Tier ${report.overallTier} Detection)\n`;
-  text += `> ${report.summary}\n\n`;
+  let text = `\n### 🎬 Motion, Animations & 3D Architecture (Tier ${report.overallTier} Detection)\n`;
+  text += `> **Status**: ${report.summary}\n\n`;
 
-  if (detected.length > 0) {
-    detected.forEach((lib) => {
-      text += `- **${lib.library.toUpperCase()}**: ${lib.description}\n`;
-      if (lib.library === "gsap-scrolltrigger") {
-        text += `  *Guidance*: Replicate scroll triggers using GSAP ScrollTrigger (pinning, scrubs, staggered enters).\n`;
-      } else if (lib.library === "aos") {
-        text += `  *Guidance*: Add \`data-aos\` attributes for scroll reveals (duration, offset, easing).\n`;
-      } else if (lib.library === "lenis") {
-        text += `  *Guidance*: Implement smooth scrolling using Lenis with vertical orientation.\n`;
-      } else if (lib.library === "framer-motion") {
-        text += `  *Guidance*: Wrap animated components in \`motion.div\` with spring transitions.\n`;
-      } else if (lib.library === "three-js" || lib.library === "spline") {
-        text += `  *Guidance*: Embed WebGL canvas / 3D viewport in interactive canvas area.\n`;
-      }
-    });
+  // 1. Lenis Smooth Scroll
+  const lenisLib = detected.find((l) => l.library === "lenis");
+  if (lenisLib) {
+    const cfg = lenisLib.config as LenisConfig | undefined;
+    text += `#### 🌊 Smooth Scrolling: Lenis (${lenisLib.version || "Active"})\n`;
+    text += `- **Runtime Parameters**: duration: \`${cfg?.duration || 1.2}s\`, orientation: \`"${cfg?.orientation || "vertical"}"\`, smoothWheel: \`${cfg?.smoothWheel !== false}\`, infinite: \`${Boolean(cfg?.infinite)}\`\n`;
+    text += `- **Drop-in React / Next.js Hook**:\n`;
+    text += `\`\`\`tsx\nimport Lenis from "lenis";\nimport { useEffect } from "react";\n\nexport function useSmoothScroll() {\n  useEffect(() => {\n    const lenis = new Lenis({\n      duration: ${cfg?.duration || 1.2},\n      orientation: "${cfg?.orientation || "vertical"}",\n      smoothWheel: ${cfg?.smoothWheel !== false},\n    });\n    function raf(time: number) {\n      lenis.raf(time);\n      requestAnimationFrame(raf);\n    }\n    requestAnimationFrame(raf);\n    return () => lenis.destroy();\n  }, []);\n}\n\`\`\`\n\n`;
   }
 
+  // 2. Three.js / WebGL 3D
+  const threeLib = detected.find((l) => l.library === "three-js");
+  if (threeLib || report.hasWebGL) {
+    const cfg = threeLib?.config as ThreeConfig | undefined;
+    const webgl = report.webglDetails;
+    text += `#### 🧊 3D & WebGL Canvas: Three.js\n`;
+    text += `- **WebGL Version**: WebGL ${cfg?.webglVersion || webgl?.webglVersion || 2}\n`;
+    text += `- **Canvas Instances**: ${cfg?.canvasCount || webgl?.canvasCount || 1}\n`;
+    if (webgl?.renderer) {
+      text += `- **GPU Renderer**: \`${webgl.renderer}\`\n`;
+    }
+    text += `- **Drop-in Three.js React Viewport**:\n`;
+    text += `\`\`\`tsx\nimport * as THREE from "three";\nimport { useEffect, useRef } from "react";\n\nexport function SceneCanvas() {\n  const canvasRef = useRef<HTMLCanvasElement>(null);\n  useEffect(() => {\n    if (!canvasRef.current) return;\n    const scene = new THREE.Scene();\n    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);\n    const renderer = new THREE.WebGLRenderer({ canvas: canvasRef.current, alpha: true, antialias: true });\n    renderer.setSize(canvasRef.current.clientWidth, canvasRef.current.clientHeight);\n    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));\n    camera.position.z = 5;\n    let reqId: number;\n    const animate = () => {\n      reqId = requestAnimationFrame(animate);\n      renderer.render(scene, camera);\n    };\n    animate();\n    return () => { cancelAnimationFrame(reqId); renderer.dispose(); };\n  }, []);\n  return <canvas ref={canvasRef} className="w-full h-full" />;\n}\n\`\`\`\n\n`;
+  }
+
+  // 3. Spline 3D
+  const splineLib = detected.find((l) => l.library === "spline");
+  if (splineLib) {
+    const cfg = splineLib.config as SplineConfig | undefined;
+    text += `#### 🪐 Spline 3D Viewport\n`;
+    text += `- **Embed Tag**: \`<spline-viewer url="${cfg?.urls?.[0] || "scene.splinecode"}"></spline-viewer>\`\n\n`;
+  }
+
+  // 4. GSAP & ScrollTrigger
+  const gsapLib = detected.find((l) => l.library === "gsap" || l.library === "gsap-scrolltrigger");
+  if (gsapLib) {
+    const cfg = gsapLib.config as GSAPConfig | undefined;
+    text += `#### ⚡ GSAP & ScrollTrigger (${gsapLib.version || "Active"})\n`;
+    if (cfg?.triggers && cfg.triggers.length > 0) {
+      text += `- **ScrollTrigger Instances (${cfg.triggers.length})**:\n`;
+      cfg.triggers.slice(0, 6).forEach((t) => {
+        text += `  - Selector: \`${t.trigger}\` (start: "${t.start}", end: "${t.end}", scrub: ${t.scrub}, pin: ${t.pin})\n`;
+      });
+      text += `- **Setup Recipe**:\n`;
+      text += `\`\`\`typescript\nimport gsap from "gsap";\nimport { ScrollTrigger } from "gsap/ScrollTrigger";\ngsap.registerPlugin(ScrollTrigger);\n\n// Replicate triggers:\n${cfg.triggers.slice(0, 3).map((t) => `gsap.to("${t.trigger}", { scrollTrigger: { trigger: "${t.trigger}", start: "${t.start}", end: "${t.end}", scrub: ${t.scrub}, pin: ${t.pin} } });`).join("\n")}\n\`\`\`\n\n`;
+    } else {
+      text += `- **Guidance**: Register ScrollTrigger plugin with \`gsap.registerPlugin(ScrollTrigger)\` for scrubbed / pinned reveals.\n\n`;
+    }
+  }
+
+  // 5. AOS (Animate on Scroll)
+  const aosLib = detected.find((l) => l.library === "aos");
+  if (aosLib) {
+    const cfg = aosLib.config as AOSConfig | undefined;
+    text += `#### 🎭 AOS (Animate On Scroll)\n`;
+    text += `- **Initialization**: \`AOS.init({ duration: ${cfg?.options?.duration || 400}, easing: "${cfg?.options?.easing || "ease"}", offset: ${cfg?.options?.offset || 120}, once: ${Boolean(cfg?.options?.once)} });\`\n`;
+    if (cfg?.elements && cfg.elements.length > 0) {
+      text += `- **Target Animations**: ${cfg.elements.slice(0, 5).map((e) => `\`data-aos="${e.animation}"\` on \`${e.selector}\` (${e.count}x)`).join(", ")}\n\n`;
+    }
+  }
+
+  // 6. Framer Motion
+  const framerLib = detected.find((l) => l.library === "framer-motion");
+  if (framerLib) {
+    const cfg = framerLib.config as FramerMotionConfig | undefined;
+    text += `#### 🪄 Framer Motion\n`;
+    text += `- **Motion Elements Count**: ${framerLib.elementCount || "Present"}\n`;
+    text += `- **Layout Animations**: ${cfg?.hasLayoutAnimations ? "Enabled" : "Standard"}\n`;
+    text += `- **Component Pattern**: \`<motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>\`\n\n`;
+  }
+
+  // 7. CSS 3D Transforms
+  if (report.css3dTransforms && report.css3dTransforms.length > 0) {
+    text += `#### 📐 CSS 3D Transforms\n`;
+    text += `- Elements using perspective/preserve-3d: ${report.css3dTransforms.slice(0, 4).map((t) => `\`${t.selector}\` (perspective: ${t.perspective || "none"})`).join(", ")}\n\n`;
+  }
+
+  // 8. Keyframes
   if (report.vanillaAnimations.keyframeNames.length > 0) {
-    text += `- Keyframes to replicate: \`${report.vanillaAnimations.keyframeNames.slice(0, 8).join("`, `")}\`\n`;
+    text += `#### ⚙️ CSS @keyframes Declared\n`;
+    text += `- Replicate animations: \`@keyframes ${report.vanillaAnimations.keyframeNames.slice(0, 8).join("`, `@keyframes ")}\`\n\n`;
   }
-  return text + "\n";
+
+  return text;
 }
 
 // ── 1. v0 by Vercel Generator (~4,000 tokens) ──────────────────────────────────
@@ -146,6 +225,19 @@ export function generateV0Prompt(result: ExtractionResult): string {
   prompt += `3. **Responsive design:** Mobile-first layout scaling up across standard breakpoints (${tokens.breakpoints.map((b) => `${b.label}: ${b.px}px`).join(", ")}).\n`;
   prompt += `4. **Interactive polish:** Add hover states with \`transition-all duration-150\` to all buttons, links, and cards.\n`;
 
+  if (result.animations) {
+    const detected = result.animations.libraries.filter((l) => l.detected);
+    if (detected.some((l) => l.library === "lenis")) {
+      prompt += `5. **Smooth Scroll:** Wrap the page layout with the Lenis smooth scroll hook provided in Section 🎬.\n`;
+    }
+    if (detected.some((l) => l.library === "three-js") || result.animations.hasWebGL) {
+      prompt += `6. **3D WebGL Canvas:** Embed the Three.js viewport component for real-time 3D visuals.\n`;
+    }
+    if (detected.some((l) => l.library === "gsap" || l.library === "gsap-scrolltrigger")) {
+      prompt += `7. **Scroll Interactions:** Use GSAP ScrollTrigger for pinned sections and scrubbed transitions.\n`;
+    }
+  }
+
   return truncateToTokenLimit(prompt, 4000);
 }
 
@@ -192,7 +284,20 @@ export function generateLovablePrompt(result: ExtractionResult): string {
   prompt += `- Make every section fully responsive for mobile, tablet, and desktop.\n`;
   prompt += `- Keep component state interactive (toggles, modals, tabs work with React state).\n`;
 
-  return truncateToTokenLimit(prompt, 3000);
+  if (result.animations) {
+    const detected = result.animations.libraries.filter((l) => l.detected);
+    if (detected.some((l) => l.library === "lenis")) {
+      prompt += `- Initialize Lenis smooth scroll for seamless buttery vertical scrolling.\n`;
+    }
+    if (detected.some((l) => l.library === "three-js") || result.animations.hasWebGL) {
+      prompt += `- Render the interactive 3D WebGL background or hero canvas using Three.js.\n`;
+    }
+    if (detected.some((l) => l.library === "framer-motion")) {
+      prompt += `- Animate cards and section reveals using Framer Motion with \`whileInView\`.\n`;
+    }
+  }
+
+  return truncateToTokenLimit(prompt, 3200);
 }
 
 // ── 3. Cursor AI Generator (~5,000 tokens) ──────────────────────────────────────
@@ -211,6 +316,9 @@ export function generateCursorPrompt(result: ExtractionResult): string {
   prompt += `- When styling elements, never hardcode arbitrary hex colors; use the semantic color tokens.\n`;
   prompt += `- Follow atomic design principles: atoms (buttons, badges) -> molecules (cards, forms) -> organisms (sections).\n`;
   prompt += `- Respect the responsive breakpoint system: ${tokens.breakpoints.map((b) => `${b.label} (${b.px}px)`).join(", ")}.\n`;
+  if (result.animations) {
+    prompt += `- Replicate the detected motion stack (Lenis, Three.js, GSAP ScrollTrigger, AOS) using the exact parameters and recipes in the Motion Architecture section.\n`;
+  }
   prompt += `\`\`\`\n\n`;
 
   prompt += `### TAILWIND CONFIGURATION (tailwind.config.js)\n`;
@@ -231,7 +339,7 @@ export function generateCursorPrompt(result: ExtractionResult): string {
   prompt += `### FULL DESIGN SPECIFICATION (DESIGN.md)\n`;
   prompt += `${baseDesign}\n`;
 
-  return truncateToTokenLimit(prompt, 5000);
+  return truncateToTokenLimit(prompt, 5500);
 }
 
 // ── 4. Claude Code Generator (~7,000 tokens) ────────────────────────────────────
@@ -309,8 +417,11 @@ export function generateClaudeCodePrompt(result: ExtractionResult): string {
   prompt += `2. **Use Tailwind CSS v4 or v3 utility classes** that correspond directly to the extracted tokens.\n`;
   prompt += `3. **Maintain accessibility:** Ensure text meets WCAG AA contrast standards against container backgrounds.\n`;
   prompt += `4. **Apply smooth transitions:** All interactive elements must have \`transition-colors duration-150\`.\n`;
+  if (result.animations) {
+    prompt += `5. **Motion and 3D System:** Install the recommended motion dependencies and apply the Lenis smooth scroll and Three.js canvas recipes in the Motion Architecture section.\n`;
+  }
 
-  return truncateToTokenLimit(prompt, 7000);
+  return truncateToTokenLimit(prompt, 7500);
 }
 
 // ── 5. Bolt.new Generator (~4,500 tokens) ───────────────────────────────────────
@@ -356,8 +467,11 @@ export function generateBoltPrompt(result: ExtractionResult): string {
   prompt += `- Use semantic HTML elements (<header>, <nav>, <main>, <section>, <footer>).\n`;
   prompt += `- Implement responsive navigation with mobile drawer/menu.\n`;
   prompt += `- Add hover, active, and focus-visible states across all interactable elements.\n`;
+  if (result.animations) {
+    prompt += `- Wire up Lenis smooth scrolling in App.tsx or embed the Three.js canvas component where 3D visuals are indicated.\n`;
+  }
 
-  return truncateToTokenLimit(prompt, 4500);
+  return truncateToTokenLimit(prompt, 5000);
 }
 
 // ── Main Dispatcher ────────────────────────────────────────────────────────────

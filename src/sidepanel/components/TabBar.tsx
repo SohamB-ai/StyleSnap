@@ -21,9 +21,20 @@ export const TabBar: React.FC = () => {
           PROMPT
         </button>
         <button
+          onClick={() => setTab("animations")}
+          aria-label="Motion and Animations Tab"
+          className={`shrink-0 flex-1 py-1.5 px-1.5 rounded-md font-mono text-[10.5px] font-semibold text-center transition-all ${
+            activeTab === "animations"
+              ? "bg-accent text-accent-contrast shadow-sm"
+              : "text-secondary hover:text-primary hover:bg-hover/50"
+          }`}
+        >
+          MOTION
+        </button>
+        <button
           onClick={() => setTab("assets")}
           aria-label="Assets Tab"
-          className={`shrink-0 flex-1 py-1.5 px-2 rounded-md font-mono text-[11px] font-semibold text-center transition-all ${
+          className={`shrink-0 flex-1 py-1.5 px-1.5 rounded-md font-mono text-[10.5px] font-semibold text-center transition-all ${
             activeTab === "assets"
               ? "bg-accent text-accent-contrast shadow-sm"
               : "text-secondary hover:text-primary hover:bg-hover/50"
@@ -34,7 +45,7 @@ export const TabBar: React.FC = () => {
         <button
           onClick={() => setTab("export")}
           aria-label="Export and Components Tab"
-          className={`shrink-0 flex-1 py-1.5 px-2 rounded-md font-mono text-[11px] font-semibold text-center transition-all ${
+          className={`shrink-0 flex-1 py-1.5 px-1.5 rounded-md font-mono text-[10.5px] font-semibold text-center transition-all ${
             activeTab === "export"
               ? "bg-accent text-accent-contrast shadow-sm"
               : "text-secondary hover:text-primary hover:bg-hover/50"

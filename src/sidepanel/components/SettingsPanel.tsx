@@ -17,6 +17,7 @@ export const SettingsPanel: React.FC = () => {
 
   const [exportFormat, setExportFormat] = useState<ExportFormat>("design-md");
   const [domLimit, setDomLimit] = useState<number>(2000);
+  const [enableAnimations, setEnableAnimations] = useState<boolean>(true);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export const SettingsPanel: React.FC = () => {
         if (s.defaultExportFormat) setExportFormat(s.defaultExportFormat);
         if (s.domSampleLimit) setDomLimit(s.domSampleLimit);
         if (s.theme) setTheme(s.theme);
+        if (s.enableAnimationDetection !== undefined) setEnableAnimations(s.enableAnimationDetection);
       }
     });
   }, []);
@@ -56,6 +58,16 @@ export const SettingsPanel: React.FC = () => {
       const s = (res?.stylesnap_settings || {}) as Settings;
       s.domSampleLimit = val;
       chrome.storage.local.set({ stylesnap_settings: s });
+    });
+  };
+
+  const handleAnimationToggle = (val: boolean) => {
+    setEnableAnimations(val);
+    chrome.storage?.local.get("stylesnap_settings", (res) => {
+      const s = (res?.stylesnap_settings || {}) as Settings;
+      s.enableAnimationDetection = val;
+      chrome.storage.local.set({ stylesnap_settings: s });
+      showToast(val ? "Motion & 3D detection enabled" : "Motion detection disabled", "success");
     });
   };
 
@@ -169,7 +181,36 @@ export const SettingsPanel: React.FC = () => {
           </select>
         </div>
 
-        {/* 4. Storage & Data Privacy */}
+        {/* 4. Motion & 3D Detection [V3] */}
+        <div className="space-y-2 pt-3 border-t border-border/60">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-secondary block">
+                Motion & 3D Detection
+              </label>
+              <span className="text-[10.5px] text-muted block mt-0.5">
+                Extract GSAP, Framer Motion, AOS, Lenis, and WebGL 3D capabilities
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleAnimationToggle(!enableAnimations)}
+              className={`w-11 h-6 rounded-full p-0.5 transition-colors shrink-0 ${
+                enableAnimations ? "bg-accent" : "bg-surface border border-border"
+              }`}
+              role="switch"
+              aria-checked={enableAnimations}
+            >
+              <div
+                className={`w-5 h-5 rounded-full transition-transform ${
+                  enableAnimations ? "translate-x-5 bg-accent-contrast shadow-sm" : "translate-x-0 bg-muted"
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* 5. Storage & Data Privacy */}
         <div className="space-y-2 pt-3 border-t border-border/60">
           <label className="text-xs font-bold uppercase tracking-wider text-secondary">
             Data & Privacy
@@ -211,7 +252,7 @@ export const SettingsPanel: React.FC = () => {
 
       {/* Settings Footer Version info */}
       <footer className="h-10 border-t border-border bg-surface px-4 flex items-center justify-between text-[10px] text-muted shrink-0">
-        <span>StyleSnap v2.0.0</span>
+        <span>StyleSnap v3.0.0</span>
         <span>Omenova Studio</span>
       </footer>
     </div>

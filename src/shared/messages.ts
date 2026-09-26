@@ -36,7 +36,15 @@ export const enum MessageType {
   HISTORY_LOAD = "HISTORY_LOAD",
   HISTORY_RESULT = "HISTORY_RESULT",
   HISTORY_DELETE = "HISTORY_DELETE",
-  HISTORY_CLEAR = "HISTORY_CLEAR"
+  HISTORY_CLEAR = "HISTORY_CLEAR",
+
+  // Animations & 3D / WebGL [V3]
+  DETECT_ANIMATIONS = "DETECT_ANIMATIONS",
+  ANIMATION_RESULT = "ANIMATION_RESULT",
+
+  // Site Diff [V3]
+  DIFF_EXTRACTIONS = "DIFF_EXTRACTIONS",
+  DIFF_RESULT = "DIFF_RESULT"
 }
 
 export type Context = "panel" | "content-script" | "service-worker";
@@ -57,7 +65,7 @@ export type ExtractPagePayload = {
 export type ProgressPayload = {
   step: string;
   pct: number;
-  phase: 1 | 2 | 3 | 4;
+  phase: 1 | 2 | 3 | 4 | 5;
 };
 
 export type CaptureScreenshotPayload = { tabId: number };

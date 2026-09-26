@@ -6,6 +6,7 @@ import { extractTokens } from "./extractor/tokens";
 import { scanAssets } from "./extractor/assets";
 import { extractLayout } from "./extractor/layout";
 import { detectComponents } from "./extractor/components";
+import { scanAnimationsDOM } from "./extractor/animations";
 import { activateInspector, deactivateInspector } from "./inspector";
 import { captureFullPageScreenshots } from "./screenshotDriver";
 
@@ -25,7 +26,7 @@ function getPort(): chrome.runtime.Port {
   return port!;
 }
 
-function sendProgress(step: string, pct: number, phase: 1 | 2 | 3 | 4) {
+function sendProgress(step: string, pct: number, phase: 1 | 2 | 3 | 4 | 5) {
   if (typeof chrome === "undefined" || !chrome.runtime?.id) return;
 
   let sentViaPort = false;
@@ -57,7 +58,7 @@ function runFullExtraction(domLimit: number = 2000) {
   const startTime = Date.now();
   const extractionId = `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
       sendProgress("Reading CSS custom properties & breakpoints...", 15, 1);
 
@@ -104,9 +105,52 @@ function runFullExtraction(domLimit: number = 2000) {
       }).catch(() => {});
 
       // Phase 4: Layout & Components [V2]
-      sendProgress("Analyzing page layout & component patterns...", 90, 4);
+      sendProgress("Analyzing page layout & component patterns...", 88, 4);
       const layout = extractLayout();
       const components = detectComponents(domLimit);
+
+      // Phase 5: Motion, Animation & 3D / WebGL Detection [V3]
+      sendProgress("Detecting motion, scroll effects & 3D / WebGL...", 95, 5);
+      const domReport = scanAnimationsDOM();
+      let animationsReport = domReport;
+
+      try {
+        const mainReport = await new Promise<any>((resolve) => {
+          const timeout = setTimeout(() => {
+            window.removeEventListener("message", handler);
+            resolve(null);
+          }, 1200);
+
+          function handler(event: MessageEvent) {
+            if (
+              event.data?.source === "stylesnap-main" &&
+              event.data?.type === "ANIMATION_RESULT"
+            ) {
+              clearTimeout(timeout);
+              window.removeEventListener("message", handler);
+              resolve(event.data.payload);
+            }
+          }
+
+          window.addEventListener("message", handler);
+
+          chrome.runtime
+            .sendMessage({
+              type: MessageType.DETECT_ANIMATIONS,
+            })
+            .catch(() => {
+              clearTimeout(timeout);
+              window.removeEventListener("message", handler);
+              resolve(null);
+            });
+        });
+
+        if (mainReport && mainReport.libraries) {
+          animationsReport = mainReport;
+        }
+      } catch {
+        // Fallback to DOM scan
+      }
 
       const duration = Date.now() - startTime;
 
@@ -118,13 +162,14 @@ function runFullExtraction(domLimit: number = 2000) {
         favicon: assets.favicon?.dataUri || "",
         timestamp: startTime,
         duration,
-        version: "2.0.0",
+        version: "3.0.0",
         tokens,
         assets,
         layout,
         components,
+        animations: animationsReport,
         warnings,
-        confidence: 0.96,
+        confidence: 0.98,
         detectedFramework: framework
       };
 
@@ -133,7 +178,7 @@ function runFullExtraction(domLimit: number = 2000) {
         type: MessageType.CHECKPOINT_CLEAR
       }).catch(() => {});
 
-      sendProgress("Extraction complete!", 100, 4);
+      sendProgress("Extraction complete!", 100, 5);
 
       if (typeof chrome !== "undefined" && chrome.runtime?.id) {
         chrome.runtime.sendMessage({

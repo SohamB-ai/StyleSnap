@@ -78,7 +78,7 @@ export const Header: React.FC = () => {
               StyleSnap
             </h1>
             <span className="text-[10px] text-secondary font-mono">
-              v2.0.0
+              v3.0.0
             </span>
           </div>
         </div>

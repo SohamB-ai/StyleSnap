@@ -99,7 +99,20 @@ export function generateTokensJSON(result: ExtractionResult): string {
     spacing: spacingGroup,
     "border-radius": radiiGroup,
     "box-shadow": shadowGroup,
-    "z-index": zIndexGroup
+    "z-index": zIndexGroup,
+    ...(result.animations
+      ? {
+          animation: {
+            $type: "other",
+            $description: `Detected animation libraries (Tier ${result.animations.overallTier}): ${result.animations.summary}`,
+            summary: result.animations.summary,
+            tier: result.animations.overallTier,
+            libraries: result.animations.libraries.filter((l) => l.detected),
+            hasWebGL: result.animations.hasWebGL,
+            vanilla: result.animations.vanillaAnimations
+          }
+        }
+      : {})
   };
 
   return JSON.stringify(dtcgPayload, null, 2);
@@ -250,7 +263,61 @@ export function generateDesignMD(result: ExtractionResult): string {
   md += `## Interactive States & Animation Guidelines\n\n`;
   md += `1. **Transitions:** Use \`transition-all 150ms cubic-bezier(0.4, 0, 0.2, 1)\` on buttons, anchors, and cards.\n`;
   md += `2. **Focus States:** Add visible \`focus-visible:ring-2 focus-visible:ring-offset-2\` using the accent token.\n`;
-  md += `3. **Elevation on Hover:** Elevate card surfaces with corresponding shadow levels on hover.\n`;
+  md += `3. **Elevation on Hover:** Elevate card surfaces with corresponding shadow levels on hover.\n\n`;
+
+  // Animations & Motion [V3]
+  if (result.animations) {
+    const report = result.animations;
+    md += `## 🎬 Animations & Motion Effects\n\n`;
+    md += `**Overall Accuracy:** Tier ${report.overallTier} (${
+      report.overallTier === 1
+        ? "High Accuracy — Library globals & exact configurations detected"
+        : report.overallTier === 2
+        ? "Heuristic — Motion components & variables identified"
+        : "Presence Only — CSS and DOM attribute scanning"
+    })\n\n`;
+    md += `> ${report.summary}\n\n`;
+
+    const detectedLibs = report.libraries.filter((l) => l.detected);
+    if (detectedLibs.length > 0) {
+      md += `### Detected Animation & 3D Libraries\n\n`;
+      detectedLibs.forEach((lib) => {
+        md += `#### ${lib.library.toUpperCase()}${lib.version ? ` (${lib.version})` : ""}\n`;
+        md += `- **Status**: Active (Tier ${lib.tier})\n`;
+        md += `- **Details**: ${lib.description}\n`;
+        if (lib.elementCount) {
+          md += `- **Animated Elements**: ${lib.elementCount}\n`;
+        }
+        if (lib.library === "gsap-scrolltrigger" && lib.config) {
+          const cfg = lib.config as any;
+          if (cfg.triggers?.length) {
+            md += `- **ScrollTrigger Instances:**\n`;
+            cfg.triggers.slice(0, 10).forEach((t: any) => {
+              md += `  - \`${t.trigger}\`: start="${t.start}", end="${t.end}"${
+                t.scrub ? ", scrub" : ""
+              }${t.pin ? ", pin" : ""}\n`;
+            });
+          }
+        }
+        md += `\n`;
+      });
+    }
+
+    if (report.hasWebGL || (report.css3dTransforms && report.css3dTransforms.length > 0)) {
+      md += `### 3D & WebGL Capabilities\n\n`;
+      if (report.webglDetails) {
+        md += `- **WebGL Version**: WebGL ${report.webglDetails.webglVersion}\n`;
+        md += `- **Canvas Count**: ${report.webglDetails.canvasCount}\n`;
+        if (report.webglDetails.renderer) {
+          md += `- **GPU Renderer**: ${report.webglDetails.renderer}\n`;
+        }
+      }
+      if (report.css3dTransforms && report.css3dTransforms.length > 0) {
+        md += `- **CSS 3D Transforms**: ${report.css3dTransforms.length} elements utilizing perspective / preserve-3d\n`;
+      }
+      md += `\n`;
+    }
+  }
 
   return md;
 }
@@ -448,8 +515,27 @@ Paste these CSS variables into your global stylesheet (e.g. \`globals.css\` or \
     }
   }
 
+  // Animation Architecture [V3]
+  if (result.animations) {
+    const report = result.animations;
+    skill += `## 8. Animation & Motion Architecture (Tier ${report.overallTier})\n`;
+    skill += `> ${report.summary}\n\n`;
+
+    const detected = report.libraries.filter((l) => l.detected);
+    if (detected.length > 0) {
+      detected.forEach((lib) => {
+        skill += `- **${lib.library.toUpperCase()}**: ${lib.description}\n`;
+      });
+      skill += `\n`;
+    }
+
+    if (report.vanillaAnimations.keyframeNames.length > 0) {
+      skill += `- **Keyframes Replicated**: \`${report.vanillaAnimations.keyframeNames.slice(0, 10).join("`, `")}\`\n\n`;
+    }
+  }
+
   // Guidelines for AI Agents
-  skill += `## 8. Guidelines for AI Coding Agents (Claude Code, Antigravity, Cursor)
+  skill += `## 9. Guidelines for AI Coding Agents (Claude Code, Antigravity, Cursor)
 1. **Component Scoping**: Wrap all custom styles inside clean utility classes or CSS module tokens.
 2. **Animation & Interactions**: Ensure smooth 150ms-200ms ease-in-out transitions on hover/focus state changes.
 3. **Responsive Design**: Respect the extracted breakpoints (${tokens.breakpoints.map(b => `${b.label}: ${b.px}px`).join(", ")}).

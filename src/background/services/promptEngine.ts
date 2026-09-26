@@ -67,6 +67,40 @@ function formatComponents(components?: Component[], maxCount = 8): string {
     .join("\n");
 }
 
+function formatAnimationPromptSection(result: ExtractionResult): string {
+  if (!result.animations) return "";
+  const report = result.animations;
+  const detected = report.libraries.filter((l) => l.detected);
+  if (detected.length === 0 && !report.hasWebGL && report.vanillaAnimations.cssAnimationCount === 0) {
+    return "";
+  }
+
+  let text = `\n### 🎬 Motion, Animations & 3D Effects (Tier ${report.overallTier} Detection)\n`;
+  text += `> ${report.summary}\n\n`;
+
+  if (detected.length > 0) {
+    detected.forEach((lib) => {
+      text += `- **${lib.library.toUpperCase()}**: ${lib.description}\n`;
+      if (lib.library === "gsap-scrolltrigger") {
+        text += `  *Guidance*: Replicate scroll triggers using GSAP ScrollTrigger (pinning, scrubs, staggered enters).\n`;
+      } else if (lib.library === "aos") {
+        text += `  *Guidance*: Add \`data-aos\` attributes for scroll reveals (duration, offset, easing).\n`;
+      } else if (lib.library === "lenis") {
+        text += `  *Guidance*: Implement smooth scrolling using Lenis with vertical orientation.\n`;
+      } else if (lib.library === "framer-motion") {
+        text += `  *Guidance*: Wrap animated components in \`motion.div\` with spring transitions.\n`;
+      } else if (lib.library === "three-js" || lib.library === "spline") {
+        text += `  *Guidance*: Embed WebGL canvas / 3D viewport in interactive canvas area.\n`;
+      }
+    });
+  }
+
+  if (report.vanillaAnimations.keyframeNames.length > 0) {
+    text += `- Keyframes to replicate: \`${report.vanillaAnimations.keyframeNames.slice(0, 8).join("`, `")}\`\n`;
+  }
+  return text + "\n";
+}
+
 // ── 1. v0 by Vercel Generator (~4,000 tokens) ──────────────────────────────────
 // v0 is component-first and natively integrates shadcn/ui + Tailwind CSS.
 export function generateV0Prompt(result: ExtractionResult): string {
@@ -103,6 +137,8 @@ export function generateV0Prompt(result: ExtractionResult): string {
   prompt += `## 6. Component Specs (Map to shadcn/ui equivalents)\n`;
   prompt += `Where applicable, use standard shadcn/ui components (Button, Card, Input, Badge, Dialog, Table, Tabs) styled with the exact CSS and HTML structures below:\n\n`;
   prompt += `${formatComponents(components, 6)}\n\n`;
+
+  prompt += formatAnimationPromptSection(result);
 
   prompt += `## 7. Implementation Guidelines for v0\n`;
   prompt += `1. **Use Lucide React icons** for any iconography.\n`;
@@ -148,6 +184,8 @@ export function generateLovablePrompt(result: ExtractionResult): string {
     prompt += `${formatComponents(components, 5)}\n\n`;
   }
 
+  prompt += formatAnimationPromptSection(result);
+
   prompt += `### 5. Guardrails & Polish\n`;
   prompt += `- Ensure high contrast text readability on all surface backgrounds.\n`;
   prompt += `- Add smooth 150ms transitions on all hover, active, and focus states.\n`;
@@ -187,6 +225,8 @@ export function generateCursorPrompt(result: ExtractionResult): string {
 
   prompt += `### DETECTED COMPONENT LIBRARY\n`;
   prompt += `${formatComponents(components, 8)}\n\n`;
+
+  prompt += formatAnimationPromptSection(result);
 
   prompt += `### FULL DESIGN SPECIFICATION (DESIGN.md)\n`;
   prompt += `${baseDesign}\n`;
@@ -262,6 +302,8 @@ export function generateClaudeCodePrompt(result: ExtractionResult): string {
     prompt += `${formatComponents(components, 10)}\n\n`;
   }
 
+  prompt += formatAnimationPromptSection(result);
+
   prompt += `## Instructions for Claude Code\n`;
   prompt += `1. **Consult this skill** before generating any HTML or CSS to ensure 100% token fidelity.\n`;
   prompt += `2. **Use Tailwind CSS v4 or v3 utility classes** that correspond directly to the extracted tokens.\n`;
@@ -306,6 +348,8 @@ export function generateBoltPrompt(result: ExtractionResult): string {
     prompt += `### STEP 5: Interactive Components & Experience\n`;
     prompt += `${formatComponents(components, 6)}\n\n`;
   }
+
+  prompt += formatAnimationPromptSection(result);
 
   prompt += `### Execution Instructions\n`;
   prompt += `- Scaffold the component tree with modular files.\n`;

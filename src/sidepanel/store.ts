@@ -1,10 +1,10 @@
 // Zustand Store for StyleSnap Side Panel UI
 
 import { create } from "zustand";
-import { ExtractionResult, HistoryEntry, ExtractionCheckpoint } from "../shared/types";
+import { ExtractionResult, HistoryEntry, ExtractionCheckpoint, SiteDiffResult } from "../shared/types";
 import { ElementSelectedPayload } from "../shared/messages";
 
-export type TabType = "ai-prompt" | "assets" | "export" | "history";
+export type TabType = "ai-prompt" | "assets" | "export" | "history" | "animations";
 
 interface StyleSnapStore {
   activeTab: TabType;
@@ -23,6 +23,11 @@ interface StyleSnapStore {
   hasScreenshots: boolean;
   pendingCheckpoint: ExtractionCheckpoint | null;
   pendingSaveHandle: any | null;
+
+  // V3: Site-Diff State
+  diffResult: SiteDiffResult | null;
+  baselineExtraction: ExtractionResult | null;
+  isDiffing: boolean;
 
   // Actions
   setTab: (tab: TabType) => void;
@@ -43,6 +48,10 @@ interface StyleSnapStore {
   setHasScreenshots: (has: boolean) => void;
   setPendingCheckpoint: (cp: ExtractionCheckpoint | null) => void;
   setPendingSaveHandle: (handle: any | null) => void;
+  setDiffResult: (diff: SiteDiffResult | null) => void;
+  setBaselineExtraction: (res: ExtractionResult | null) => void;
+  setIsDiffing: (isDiffing: boolean) => void;
+  clearDiff: () => void;
 }
 
 export const useStore = create<StyleSnapStore>((set) => ({
@@ -62,6 +71,9 @@ export const useStore = create<StyleSnapStore>((set) => ({
   hasScreenshots: false,
   pendingCheckpoint: null,
   pendingSaveHandle: null,
+  diffResult: null,
+  baselineExtraction: null,
+  isDiffing: false,
 
   setTab: (activeTab) => set({ activeTab, inspectedElement: null }),
   setResult: (result) =>
@@ -119,5 +131,9 @@ export const useStore = create<StyleSnapStore>((set) => ({
     set({ isCapturingScreenshot: false, screenshotProgress: 100, hasScreenshots: true }),
   setHasScreenshots: (hasScreenshots) => set({ hasScreenshots }),
   setPendingCheckpoint: (pendingCheckpoint) => set({ pendingCheckpoint }),
-  setPendingSaveHandle: (pendingSaveHandle) => set({ pendingSaveHandle })
+  setPendingSaveHandle: (pendingSaveHandle) => set({ pendingSaveHandle }),
+  setDiffResult: (diffResult) => set({ diffResult }),
+  setBaselineExtraction: (baselineExtraction) => set({ baselineExtraction }),
+  setIsDiffing: (isDiffing) => set({ isDiffing }),
+  clearDiff: () => set({ diffResult: null, isDiffing: false })
 }));

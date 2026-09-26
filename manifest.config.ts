@@ -3,7 +3,7 @@ import { defineManifest } from "@crxjs/vite-plugin";
 export default defineManifest(async (env) => ({
   manifest_version: 3,
   name: "StyleSnap",
-  version: "2.0.0",
+  version: "3.0.0",
   minimum_chrome_version: "114",
   description: "Extract any website's design system in one click — tokens, components, assets, and AI prompts.",
   permissions: [

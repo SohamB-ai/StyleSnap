@@ -272,6 +272,8 @@ export interface ExtractionResult {
   assets: AssetManifest;
   layout?: LayoutStructure;
   components?: Component[];
+  animations?: AnimationReport;
+  siteDiff?: SiteDiffResult;
   warnings: string[];
   confidence: number; // 0–1
   detectedFramework: FrameworkType;
@@ -297,6 +299,8 @@ export interface Settings {
   defaultAITool: AITool;
   domSampleLimit: number;
   enableAnimationDetection: boolean;
+  diffBaselineId?: string;
+  diffBaselineUrl?: string;
   installedAt: number;
   lastOpenedAt: number;
 }
@@ -339,4 +343,221 @@ export interface ExtractionCheckpoint {
   partialResult: Partial<ExtractionResult>;
   savedAt: number;
 }
+
+// ═══════════════════════════════════════════════════
+// V3: Animation & Scroll Detection Types
+// ═══════════════════════════════════════════════════
+
+export type AnimationLibrary =
+  | "gsap"
+  | "gsap-scrolltrigger"
+  | "framer-motion"
+  | "aos"
+  | "lenis"
+  | "locomotive-scroll"
+  | "scrollmagic"
+  | "three-js"
+  | "spline";
+
+export type AccuracyTier = 1 | 2 | 3;
+
+export type InjectionMethod = "main-world" | "dom-only" | "timeout-fallback";
+
+export interface AnimationReport {
+  detectedAt: number;
+  injectionMethod: InjectionMethod;
+  libraries: LibraryDetection[];
+  vanillaAnimations: VanillaAnimationInfo;
+  hasWebGL: boolean;
+  webglDetails?: WebGLDetails;
+  css3dTransforms: CSS3DTransformInfo[];
+  overallTier: AccuracyTier;
+  summary: string;
+}
+
+export interface LibraryDetection {
+  library: AnimationLibrary;
+  detected: boolean;
+  version?: string;
+  tier: AccuracyTier;
+  config?:
+    | GSAPConfig
+    | AOSConfig
+    | LenisConfig
+    | LocomotiveConfig
+    | FramerMotionConfig
+    | ScrollMagicConfig
+    | ThreeConfig
+    | SplineConfig;
+  description: string;
+  elementCount?: number;
+}
+
+// ── GSAP ──
+export interface GSAPConfig {
+  version: string;
+  hasScrollTrigger: boolean;
+  triggers: ScrollTriggerInstance[];
+  globalTimeline: { timeScale: number; paused: boolean };
+}
+
+export interface ScrollTriggerInstance {
+  id: number;
+  trigger: string;
+  start: string;
+  end: string;
+  scrub: boolean | number;
+  pin: boolean | string;
+  toggleClass?: string;
+  markers: boolean;
+  once: boolean;
+  ease?: string;
+  animation?: string;
+}
+
+// ── AOS ──
+export interface AOSConfig {
+  version: string;
+  options: { duration: number; easing: string; offset: number; once: boolean };
+  elements: AOSElement[];
+}
+
+export interface AOSElement {
+  animation: string;
+  duration?: number;
+  offset?: number;
+  delay?: number;
+  easing?: string;
+  selector: string;
+  count: number;
+}
+
+// ── Lenis ──
+export interface LenisConfig {
+  version: string;
+  duration: number;
+  easing: string;
+  smoothWheel: boolean;
+  infinite: boolean;
+  orientation: string;
+}
+
+// ── Locomotive Scroll ──
+export interface LocomotiveConfig {
+  version?: string;
+  smooth: boolean;
+  elements: LocomotiveElement[];
+}
+
+export interface LocomotiveElement {
+  speed?: string;
+  direction?: string;
+  delay?: string;
+  selector: string;
+  count: number;
+}
+
+// ── Framer Motion ──
+export interface FramerMotionConfig {
+  detected: boolean;
+  hasLayoutAnimations: boolean;
+  elementsWithFramerProps: number;
+  framerVariables: string[];
+}
+
+// ── ScrollMagic ──
+export interface ScrollMagicConfig {
+  detected: boolean;
+  sceneCount?: number;
+}
+
+// ── Three.js ──
+export interface ThreeConfig {
+  revision: string;
+  canvasCount: number;
+  webglVersion: number;
+}
+
+// ── Spline ──
+export interface SplineConfig {
+  viewerCount: number;
+  urls: string[];
+}
+
+// ── WebGL Details ──
+export interface WebGLDetails {
+  canvasCount: number;
+  webglVersion: number;
+  renderer?: string;
+  vendor?: string;
+}
+
+// ── CSS 3D Transforms ──
+export interface CSS3DTransformInfo {
+  selector: string;
+  perspective?: string;
+  transformStyle?: string;
+  transform?: string;
+}
+
+// ── Vanilla Animations ──
+export interface VanillaAnimationInfo {
+  cssAnimationCount: number;
+  cssTransitionCount: number;
+  keyframeNames: string[];
+  intersectionObserverDetected: boolean;
+}
+
+// ═══════════════════════════════════════════════════
+// V3: Site-Diff Types
+// ═══════════════════════════════════════════════════
+
+export type DiffChangeType = "added" | "removed" | "modified" | "unchanged";
+
+export interface SiteDiffResult {
+  baselineUrl: string;
+  comparisonUrl: string;
+  baselineTimestamp: number;
+  comparisonTimestamp: number;
+  tokenDiffs: TokenDiffGroup[];
+  layoutDiffs: LayoutDiff[];
+  componentDiffs: ComponentDiff[];
+  animationDiffs: AnimationDiff[];
+  overallSimilarity: number; // 0-100%
+  summary: string;
+}
+
+export interface TokenDiffGroup {
+  category: "colors" | "typography" | "spacing" | "shadows" | "radii" | "breakpoints" | "zIndex";
+  changes: TokenDiffEntry[];
+  similarity: number;
+}
+
+export interface TokenDiffEntry {
+  name: string;
+  changeType: DiffChangeType;
+  baselineValue?: string;
+  comparisonValue?: string;
+}
+
+export interface LayoutDiff {
+  section: string;
+  changeType: DiffChangeType;
+  details: string;
+}
+
+export interface ComponentDiff {
+  label: string;
+  changeType: DiffChangeType;
+  baselineCount?: number;
+  comparisonCount?: number;
+  structuralChanges?: string;
+}
+
+export interface AnimationDiff {
+  library: string;
+  changeType: DiffChangeType;
+  details: string;
+}
+
 

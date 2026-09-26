@@ -1,7 +1,7 @@
 // History Tab View Component (Saved Extractions & Cascade Deletion)
 
 import React, { useEffect, useState } from "react";
-import { Trash2, ExternalLink, Clock, AlertTriangle, Loader2 } from "lucide-react";
+import { Trash2, ExternalLink, Clock, AlertTriangle, Loader2, GitCompare, Check } from "lucide-react";
 import { useStore } from "../store";
 import { MessageType } from "../../shared/messages";
 
@@ -10,6 +10,9 @@ export const HistoryTab: React.FC = () => {
   const setHistory = useStore((s) => s.setHistory);
   const setResult = useStore((s) => s.setResult);
   const showToast = useStore((s) => s.showToast);
+  const baselineExtraction = useStore((s) => s.baselineExtraction);
+  const setBaselineExtraction = useStore((s) => s.setBaselineExtraction);
+  const setDiffResult = useStore((s) => s.setDiffResult);
 
   const [isLoading, setIsLoading] = useState(true);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
@@ -78,6 +81,49 @@ export const HistoryTab: React.FC = () => {
     }
   };
 
+  const handleSetBaseline = (e: React.MouseEvent, entryId: string) => {
+    e.stopPropagation();
+    try {
+      chrome.runtime.sendMessage({ type: MessageType.HISTORY_LOAD, payload: { id: entryId } }, (res) => {
+        if (res?.result) {
+          setBaselineExtraction(res.result);
+          showToast("Set as baseline for Site-Diff!", "success");
+        }
+      });
+    } catch {
+      showToast("Failed to set baseline", "error");
+    }
+  };
+
+  const handleCompare = (e: React.MouseEvent, targetId: string) => {
+    e.stopPropagation();
+    if (!baselineExtraction) {
+      showToast("Select a baseline extraction first", "error");
+      return;
+    }
+    showToast("Comparing extractions...", "success");
+    try {
+      chrome.runtime.sendMessage(
+        {
+          type: MessageType.DIFF_EXTRACTIONS,
+          payload: {
+            baselineResult: baselineExtraction,
+            comparisonId: targetId,
+          },
+        },
+        (res) => {
+          if (res?.success && res?.diffResult) {
+            setDiffResult(res.diffResult);
+          } else {
+            showToast(res?.error || "Diff failed", "error");
+          }
+        }
+      );
+    } catch {
+      showToast("Failed to run diff", "error");
+    }
+  };
+
   const formatTime = (ts: number) => {
     const diffMs = Date.now() - ts;
     const mins = Math.floor(diffMs / 60000);
@@ -105,6 +151,29 @@ export const HistoryTab: React.FC = () => {
           </button>
         )}
       </div>
+
+      {/* V3 Site-Diff Baseline Indicator */}
+      {baselineExtraction && (
+        <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs animate-in fade-in">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <GitCompare className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <div className="truncate">
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider block">
+                Diff Baseline Active
+              </span>
+              <span className="font-semibold text-primary truncate block text-[11px]">
+                {baselineExtraction.title}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => setBaselineExtraction(null)}
+            className="text-[10px] text-secondary hover:text-primary px-1.5 py-0.5 rounded bg-surface border border-border"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {confirmClearOpen && (
         <div className="p-3 bg-error/10 border border-error/40 rounded-lg space-y-2 animate-in fade-in duration-150">
@@ -165,11 +234,11 @@ export const HistoryTab: React.FC = () => {
                 </div>
 
                 <div className="min-w-0 space-y-0.5">
-                  <div className="font-semibold text-xs text-primary truncate max-w-[170px]">
+                  <div className="font-semibold text-xs text-primary truncate max-w-[150px]">
                     {entry.title}
                   </div>
                   <div className="flex items-center gap-2 text-[10px] text-secondary font-mono">
-                    <span className="truncate max-w-[110px]">{entry.origin.replace("https://", "")}</span>
+                    <span className="truncate max-w-[100px]">{entry.origin.replace("https://", "")}</span>
                     <span>•</span>
                     <span className="text-muted">{formatTime(entry.timestamp)}</span>
                   </div>
@@ -179,14 +248,43 @@ export const HistoryTab: React.FC = () => {
                 </div>
               </div>
 
-              {/* Delete Icon on Hover */}
-              <button
-                onClick={(e) => handleDeleteEntry(e, entry.id)}
-                className="p-1.5 rounded text-muted hover:text-error hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Delete extraction"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {/* Action Buttons */}
+              <div className="flex items-center gap-1 shrink-0">
+                {baselineExtraction?.id === entry.id ? (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                    Baseline
+                  </span>
+                ) : (
+                  <>
+                    {baselineExtraction && (
+                      <button
+                        onClick={(e) => handleCompare(e, entry.id)}
+                        className="px-2 py-1 rounded text-[10.5px] font-semibold bg-accent text-accent-contrast flex items-center gap-1 hover:opacity-90 transition-opacity shadow-sm"
+                        title="Compare with baseline"
+                      >
+                        <GitCompare className="w-3 h-3" />
+                        <span>Diff</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => handleSetBaseline(e, entry.id)}
+                      className="px-1.5 py-1 rounded text-[10px] font-medium text-secondary hover:text-primary hover:bg-hover transition-colors opacity-0 group-hover:opacity-100"
+                      title="Set as diff baseline"
+                    >
+                      Baseline
+                    </button>
+                  </>
+                )}
+
+                {/* Delete Icon on Hover */}
+                <button
+                  onClick={(e) => handleDeleteEntry(e, entry.id)}
+                  className="p-1.5 rounded text-muted hover:text-error hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Delete extraction"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ))}
         </div>

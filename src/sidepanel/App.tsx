@@ -12,6 +12,8 @@ import { AssetsTab } from "./components/AssetsTab";
 import { HistoryTab } from "./components/HistoryTab";
 import { ExportTab } from "./components/ExportTab";
 import { AIPromptTab } from "./components/AIPromptTab";
+import { AnimationsTab } from "./components/AnimationsTab";
+import { DiffView } from "./components/DiffView";
 import { ElementSelected } from "./components/ElementSelected";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Toast } from "./components/Toast";
@@ -208,6 +210,7 @@ export const App: React.FC = () => {
           ) : result ? (
             <>
               {activeTab === "ai-prompt" && <AIPromptTab />}
+              {activeTab === "animations" && <AnimationsTab />}
               {activeTab === "assets" && <AssetsTab />}
               {activeTab === "export" && <ExportTab />}
               {activeTab === "history" && <HistoryTab />}
@@ -224,6 +227,7 @@ export const App: React.FC = () => {
       {result && <ActionBar />}
 
       {/* Overlays */}
+      <DiffView />
       <SettingsPanel />
       <Toast />
     </div>

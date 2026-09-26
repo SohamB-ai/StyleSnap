@@ -1,7 +1,7 @@
 // Header Component — TypeUI DESIGN.md style header layout
 
-import React, { useEffect, useState } from "react";
-import { MousePointer2, Settings as SettingsIcon, Github, MoreVertical } from "lucide-react";
+import React, { useEffect, useState, useRef } from "react";
+import { MousePointer2, Settings as SettingsIcon, MoreVertical } from "lucide-react";
 import { useStore } from "../store";
 import { MessageType } from "../../shared/messages";
 import { StyleSnapLogoIcon } from "./Logo";
@@ -10,6 +10,7 @@ import { getActiveTab } from "../utils/tab";
 export const Header: React.FC = () => {
   const [currentUrl, setCurrentUrl] = useState<string>("Active Tab");
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const isInspecting = useStore((s) => s.isInspecting);
   const setInspecting = useStore((s) => s.setInspecting);
   const toggleSettings = useStore((s) => s.toggleSettings);
@@ -27,6 +28,22 @@ export const Header: React.FC = () => {
         }
       }
     });
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   const handleToggleInspector = () => {
@@ -72,7 +89,7 @@ export const Header: React.FC = () => {
             onClick={handleToggleInspector}
             className={`p-1 rounded transition-colors ${
               isInspecting
-                ? "bg-accent text-white"
+                ? "bg-accent text-accent-contrast shadow-xs"
                 : "hover:text-primary hover:bg-hover"
             }`}
             title={isInspecting ? "Exit Inspector Mode" : "Hover Inspector Mode"}
@@ -99,7 +116,7 @@ export const Header: React.FC = () => {
 
           {/* Three-Dot Dropdown Menu */}
           {menuOpen && (
-            <div className="absolute right-0 top-7 w-44 bg-elevated border border-border rounded-lg shadow-lg py-1 z-50 text-xs">
+            <div ref={menuRef} className="absolute right-0 top-7 w-44 bg-elevated border border-border rounded-lg shadow-lg py-1 z-50 text-xs animate-in fade-in duration-100">
               <button
                 onClick={() => { setTab("history"); setMenuOpen(false); }}
                 className="w-full px-3 py-1.5 text-left text-primary hover:bg-hover transition-colors flex items-center justify-between"

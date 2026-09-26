@@ -91,9 +91,17 @@ export const useStore = create<StyleSnapStore>((set) => ({
     }),
   setInspecting: (isInspecting) => set({ isInspecting }),
   setInspectedElement: (inspectedElement) => set({ inspectedElement, isInspecting: false }),
-  setTheme: (_theme) => {
-    document.documentElement.setAttribute("data-theme", "light");
-    set({ theme: "light" });
+  setTheme: (theme) => {
+    const resolvedTheme =
+      theme === "system"
+        ? (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light")
+        : theme;
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", resolvedTheme);
+    }
+    set({ theme });
   },
   toggleSettings: () => set((state) => ({ settingsOpen: !state.settingsOpen })),
   setHistory: (historyEntries) => set({ historyEntries }),

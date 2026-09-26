@@ -12,8 +12,12 @@ export const SettingsPanel: React.FC = () => {
   const setHistory = useStore((s) => s.setHistory);
   const showToast = useStore((s) => s.showToast);
 
+  const theme = useStore((s) => s.theme);
+  const setTheme = useStore((s) => s.setTheme);
+
   const [exportFormat, setExportFormat] = useState<ExportFormat>("design-md");
   const [domLimit, setDomLimit] = useState<number>(2000);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
 
   useEffect(() => {
     chrome.storage?.local.get("stylesnap_settings", (res) => {
@@ -21,11 +25,21 @@ export const SettingsPanel: React.FC = () => {
       if (s) {
         if (s.defaultExportFormat) setExportFormat(s.defaultExportFormat);
         if (s.domSampleLimit) setDomLimit(s.domSampleLimit);
+        if (s.theme) setTheme(s.theme);
       }
     });
   }, []);
 
   if (!settingsOpen) return null;
+
+  const handleThemeChange = (newTheme: "light" | "dark" | "system") => {
+    setTheme(newTheme);
+    chrome.storage?.local.get("stylesnap_settings", (res) => {
+      const s = (res?.stylesnap_settings || {}) as Settings;
+      s.theme = newTheme;
+      chrome.storage.local.set({ stylesnap_settings: s });
+    });
+  };
 
   const handleExportFormatChange = (fmt: ExportFormat) => {
     setExportFormat(fmt);
@@ -48,6 +62,7 @@ export const SettingsPanel: React.FC = () => {
   const handleClearHistory = () => {
     chrome.runtime.sendMessage({ type: MessageType.HISTORY_CLEAR }, () => {
       setHistory([]);
+      setConfirmClearOpen(false);
       showToast("All history cleared", "success");
     });
   };
@@ -60,6 +75,7 @@ export const SettingsPanel: React.FC = () => {
           onClick={toggleSettings}
           className="p-1 rounded text-secondary hover:text-primary hover:bg-hover transition-colors"
           title="Back to Panel"
+          aria-label="Back to Panel"
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
@@ -68,8 +84,34 @@ export const SettingsPanel: React.FC = () => {
 
       {/* Settings Options Body */}
       <div className="flex-1 p-4 space-y-5 overflow-y-auto">
-        {/* 1. DOM Element Sample Limit with Detailed Explanation */}
-        <div className="space-y-2.5">
+        {/* 1. Theme Selection */}
+        <div className="space-y-2">
+          <label className="text-xs font-bold uppercase tracking-wider text-secondary">
+            Interface Theme
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { id: "light", label: "Light" },
+              { id: "dark", label: "Dark" },
+              { id: "system", label: "System" }
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => handleThemeChange(t.id as any)}
+                className={`py-2 px-3 rounded-lg border text-xs font-medium transition-all ${
+                  theme === t.id
+                    ? "bg-accent text-accent-contrast border-accent shadow-xs font-semibold"
+                    : "bg-surface border-border text-secondary hover:text-primary hover:bg-hover"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 2. DOM Element Sample Limit with Detailed Explanation */}
+        <div className="space-y-2.5 pt-3 border-t border-border/60">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold uppercase tracking-wider text-secondary">
               DOM Sample Limit
@@ -108,7 +150,7 @@ export const SettingsPanel: React.FC = () => {
           </div>
         </div>
 
-        {/* 2. Default Export Format */}
+        {/* 3. Default Export Format */}
         <div className="space-y-2 pt-3 border-t border-border/60">
           <label className="text-xs font-bold uppercase tracking-wider text-secondary">
             Default Export Format
@@ -127,18 +169,40 @@ export const SettingsPanel: React.FC = () => {
           </select>
         </div>
 
-        {/* 3. Storage & Data Privacy */}
+        {/* 4. Storage & Data Privacy */}
         <div className="space-y-2 pt-3 border-t border-border/60">
           <label className="text-xs font-bold uppercase tracking-wider text-secondary">
             Data & Privacy
           </label>
-          <button
-            onClick={handleClearHistory}
-            className="w-full py-2 px-3 bg-error/10 border border-error/40 text-error hover:bg-error hover:text-white rounded text-xs font-medium flex items-center justify-center gap-2 transition-colors active:scale-[0.99]"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Clear All Extraction History & Cached Screenshots</span>
-          </button>
+          {!confirmClearOpen ? (
+            <button
+              onClick={() => setConfirmClearOpen(true)}
+              className="w-full py-2 px-3 bg-error/10 border border-error/40 text-error hover:bg-error hover:text-white rounded text-xs font-medium flex items-center justify-center gap-2 transition-colors active:scale-[0.99]"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear All Extraction History & Cached Screenshots</span>
+            </button>
+          ) : (
+            <div className="p-3 bg-error/10 border border-error/50 rounded-lg space-y-2 animate-in fade-in duration-150">
+              <p className="text-xs font-semibold text-error">
+                Are you sure? This will delete all saved extractions and cached screenshots.
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleClearHistory}
+                  className="flex-1 py-1.5 bg-error text-white font-semibold rounded text-xs hover:bg-error/90 transition-colors"
+                >
+                  Yes, Clear All
+                </button>
+                <button
+                  onClick={() => setConfirmClearOpen(false)}
+                  className="px-3 py-1.5 bg-surface border border-border text-secondary hover:text-primary rounded text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           <p className="text-[10px] text-muted leading-relaxed">
             All design token extractions and screenshot tiles live 100% locally in your browser's IndexedDB. Nothing is ever transmitted to an external server.
           </p>

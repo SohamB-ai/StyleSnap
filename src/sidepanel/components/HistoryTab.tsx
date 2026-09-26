@@ -1,7 +1,7 @@
 // History Tab View Component (Saved Extractions & Cascade Deletion)
 
-import React, { useEffect } from "react";
-import { Trash2, ExternalLink, Clock } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Trash2, ExternalLink, Clock, AlertTriangle, Loader2 } from "lucide-react";
 import { useStore } from "../store";
 import { MessageType } from "../../shared/messages";
 
@@ -11,11 +11,24 @@ export const HistoryTab: React.FC = () => {
   const setResult = useStore((s) => s.setResult);
   const showToast = useStore((s) => s.showToast);
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+
   const fetchHistory = () => {
-    chrome.storage?.local.get("stylesnap_history", (res) => {
-      const entries = res?.stylesnap_history?.entries || [];
-      setHistory(entries);
-    });
+    setIsLoading(true);
+    try {
+      chrome.storage?.local.get("stylesnap_history", (res) => {
+        setIsLoading(false);
+        if (chrome.runtime?.lastError) {
+          showToast("Failed to load history", "error");
+          return;
+        }
+        const entries = res?.stylesnap_history?.entries || [];
+        setHistory(entries);
+      });
+    } catch {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -23,27 +36,46 @@ export const HistoryTab: React.FC = () => {
   }, []);
 
   const handleLoadEntry = (id: string) => {
-    chrome.runtime.sendMessage({ type: MessageType.HISTORY_LOAD, payload: { id } }, (response) => {
-      if (response?.result) {
-        setResult(response.result);
-        showToast("Loaded extraction from history", "success");
-      }
-    });
+    try {
+      chrome.runtime.sendMessage({ type: MessageType.HISTORY_LOAD, payload: { id } }, (response) => {
+        if (chrome.runtime?.lastError) {
+          showToast("Could not retrieve saved extraction", "error");
+          return;
+        }
+        if (response?.result) {
+          setResult(response.result);
+          showToast("Loaded extraction from history", "success");
+        } else {
+          showToast("Extraction record not found", "error");
+        }
+      });
+    } catch {
+      showToast("Could not communicate with background service", "error");
+    }
   };
 
   const handleDeleteEntry = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    chrome.runtime.sendMessage({ type: MessageType.HISTORY_DELETE, payload: { id } }, () => {
-      fetchHistory();
-      showToast("Entry deleted", "success");
-    });
+    try {
+      chrome.runtime.sendMessage({ type: MessageType.HISTORY_DELETE, payload: { id } }, () => {
+        fetchHistory();
+        showToast("Entry deleted", "success");
+      });
+    } catch {
+      showToast("Failed to delete entry", "error");
+    }
   };
 
   const handleClearAll = () => {
-    chrome.runtime.sendMessage({ type: MessageType.HISTORY_CLEAR }, () => {
-      setHistory([]);
-      showToast("All history cleared", "success");
-    });
+    try {
+      chrome.runtime.sendMessage({ type: MessageType.HISTORY_CLEAR }, () => {
+        setHistory([]);
+        setConfirmClearOpen(false);
+        showToast("All history cleared", "success");
+      });
+    } catch {
+      showToast("Failed to clear history", "error");
+    }
   };
 
   const formatTime = (ts: number) => {
@@ -56,7 +88,7 @@ export const HistoryTab: React.FC = () => {
   };
 
   return (
-    <div className="p-4 space-y-4 pb-8">
+    <div className="p-4 space-y-4 pb-8 text-xs">
       <div className="flex items-center justify-between border-b border-border/60 pb-3">
         <div className="flex items-center gap-2">
           <h4 className="text-xs font-bold uppercase tracking-wider text-secondary">Past Extractions</h4>
@@ -64,9 +96,9 @@ export const HistoryTab: React.FC = () => {
             {historyEntries.length}/10
           </span>
         </div>
-        {historyEntries.length > 0 && (
+        {historyEntries.length > 0 && !confirmClearOpen && (
           <button
-            onClick={handleClearAll}
+            onClick={() => setConfirmClearOpen(true)}
             className="text-[11px] text-error hover:text-red-400 font-medium transition-colors"
           >
             Clear All
@@ -74,7 +106,38 @@ export const HistoryTab: React.FC = () => {
         )}
       </div>
 
-      {historyEntries.length === 0 ? (
+      {confirmClearOpen && (
+        <div className="p-3 bg-error/10 border border-error/40 rounded-lg space-y-2 animate-in fade-in duration-150">
+          <div className="flex items-center gap-1.5 text-error font-semibold text-xs">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>Clear all saved extractions?</span>
+          </div>
+          <p className="text-[10.5px] text-secondary">
+            This will permanently delete your stored design extractions from local storage.
+          </p>
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={handleClearAll}
+              className="flex-1 py-1 bg-error text-white font-semibold rounded text-xs hover:bg-error/90 transition-colors"
+            >
+              Confirm Clear
+            </button>
+            <button
+              onClick={() => setConfirmClearOpen(false)}
+              className="px-3 py-1 bg-surface border border-border text-secondary hover:text-primary rounded text-xs transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12 gap-2 text-secondary">
+          <Loader2 className="w-4 h-4 animate-spin text-accent" />
+          <span>Loading history...</span>
+        </div>
+      ) : historyEntries.length === 0 ? (
         <div className="text-center py-12 space-y-2">
           <Clock className="w-8 h-8 text-muted mx-auto" />
           <div className="text-xs font-medium text-secondary">No extraction history yet</div>

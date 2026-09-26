@@ -15,6 +15,7 @@ import { AIPromptTab } from "./components/AIPromptTab";
 import { ElementSelected } from "./components/ElementSelected";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Toast } from "./components/Toast";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { MessageType } from "../shared/messages";
 import { Settings } from "../shared/types";
 import { stitchTiles } from "./utils/stitcher";
@@ -94,8 +95,8 @@ export const App: React.FC = () => {
                 await writable.close();
                 useStore.getState().showToast("Screenshot saved to your chosen file!", "success");
                 return;
-              } catch (writeErr) {
-                console.warn("Could not write to chosen file handle:", writeErr);
+              } catch {
+                // File handle write dismissed or failed
               }
             }
 
@@ -119,17 +120,16 @@ export const App: React.FC = () => {
                   }
                 );
               }
-            } catch (dlErr) {
-              console.warn("Download saveAs prompt failed:", dlErr);
+            } catch {
+              // Download fallback handling
             }
 
             useStore.getState().showToast("Full-page screenshot captured!", "success");
           })
-          .catch((err) => {
-            console.error("Screenshot stitch failed:", err);
+          .catch(() => {
             useStore.getState().setPendingSaveHandle(null);
             useStore.setState({ isCapturingScreenshot: false });
-            useStore.getState().showToast("Screenshot stitching failed.", "error");
+            useStore.getState().showToast("Screenshot stitching failed. Please try again.", "error");
           });
       } else if (message.type === MessageType.SCREENSHOT_COMPLETE) {
         useStore.getState().finishScreenshotCapture();
@@ -200,22 +200,24 @@ export const App: React.FC = () => {
 
       {/* Main Content Scrollable Zone */}
       <main className="flex-1 min-h-0 overflow-y-auto relative flex flex-col pt-1">
-        {inspectedElement ? (
-          <ElementSelected />
-        ) : isExtracting ? (
-          <ExtractingState />
-        ) : result ? (
-          <>
-            {activeTab === "ai-prompt" && <AIPromptTab />}
-            {activeTab === "assets" && <AssetsTab />}
-            {activeTab === "export" && <ExportTab />}
-            {activeTab === "history" && <HistoryTab />}
-          </>
-        ) : activeTab === "history" ? (
-          <HistoryTab />
-        ) : (
-          <EmptyState />
-        )}
+        <ErrorBoundary>
+          {inspectedElement ? (
+            <ElementSelected />
+          ) : isExtracting ? (
+            <ExtractingState />
+          ) : result ? (
+            <>
+              {activeTab === "ai-prompt" && <AIPromptTab />}
+              {activeTab === "assets" && <AssetsTab />}
+              {activeTab === "export" && <ExportTab />}
+              {activeTab === "history" && <HistoryTab />}
+            </>
+          ) : activeTab === "history" ? (
+            <HistoryTab />
+          ) : (
+            <EmptyState />
+          )}
+        </ErrorBoundary>
       </main>
 
       {/* Bottom Action Bar — rendered only when results exist */}

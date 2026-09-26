@@ -32,26 +32,26 @@ export const QuickInstall: React.FC = () => {
     switch (id) {
       case "claude-code":
         return (
-          <svg className="w-3.5 h-3.5 fill-current text-zinc-900 shrink-0" viewBox="0 0 24 24">
+          <svg className="w-3.5 h-3.5 fill-current text-primary shrink-0" viewBox="0 0 24 24">
             <path d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z" />
           </svg>
         );
       case "codex":
         return (
-          <svg className="w-3.5 h-3.5 fill-none stroke-current text-zinc-900 shrink-0" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg className="w-3.5 h-3.5 fill-none stroke-current text-primary shrink-0" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="16 18 22 12 16 6"></polyline>
             <polyline points="8 6 2 12 8 18"></polyline>
           </svg>
         );
       case "cursor":
         return (
-          <svg className="w-3.5 h-3.5 fill-current text-zinc-900 shrink-0" viewBox="0 0 24 24">
+          <svg className="w-3.5 h-3.5 fill-current text-primary shrink-0" viewBox="0 0 24 24">
             <path d="M12 2L2 7l10 5 10-5-10-5zm0 9L2 6v11l10 5 10-5V6l-10 5z" />
           </svg>
         );
       case "antigravity":
         return (
-          <svg className="w-3.5 h-3.5 fill-current text-zinc-900 shrink-0" viewBox="0 0 24 24">
+          <svg className="w-3.5 h-3.5 fill-current text-primary shrink-0" viewBox="0 0 24 24">
             <path d="M12 2C12 2 13 8 18 12C13 16 12 22 12 22C12 22 11 16 6 12C11 8 12 2 12 2Z" />
           </svg>
         );

@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Web Request Lifecycle: Cache Miss & PostgreSQL Fallback",
+    "viewBox": [980, 480],
+    "column_fit": "spread",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "client-ingress",
+        "label": "Client Ingress",
+        "focus": ["browser", "api"],
+        "note": "Browser initiates GET request to API Gateway."
+      },
+      {
+        "id": "cache-probe",
+        "label": "Cache Probe",
+        "focus": ["api", "redis"],
+        "note": "API checks Redis in-memory cache and encounters a miss."
+      },
+      {
+        "id": "db-fallback",
+        "label": "Database Fallback",
+        "focus": ["api", "db"],
+        "note": "API queries PostgreSQL source of truth for fresh data."
+      },
+      {
+        "id": "cache-fill-response",
+        "label": "Cache Fill & Return",
+        "focus": ["api", "redis", "browser"],
+        "note": "API populates Redis cache and returns HTTP 200 to browser."
+      }
+    ]
+  },
+  "participants": [
+    {
+      "id": "browser",
+      "type": "frontend",
+      "label": "Browser",
+      "sublabel": "Client UI"
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "API Server",
+      "sublabel": "Express / Fastify"
+    },
+    {
+      "id": "redis",
+      "type": "database",
+      "label": "Redis",
+      "sublabel": "In-Memory Cache",
+      "brand": "redis"
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "Source of Truth",
+      "brand": "postgresql"
+    }
+  ],
+  "segments": [
+    { "from": 150, "to": 250, "label": "Request & Cache Lookup" },
+    { "from": 260, "to": 325, "label": "Database Query" },
+    { "from": 335, "to": 405, "label": "Cache Fill & Response" }
+  ],
+  "messages": [
+    {
+      "id": "req-api",
+      "from": "browser",
+      "to": "api",
+      "y": 170,
+      "label": "GET /api/resource",
+      "variant": "emphasis"
+    },
+    {
+      "id": "get-cache",
+      "from": "api",
+      "to": "redis",
+      "y": 205,
+      "label": "GET cache:key",
+      "variant": "default"
+    },
+    {
+      "id": "miss-cache",
+      "from": "redis",
+      "to": "api",
+      "y": 237,
+      "label": "(nil) cache miss",
+      "variant": "return"
+    },
+    {
+      "id": "query-db",
+      "from": "api",
+      "to": "db",
+      "y": 275,
+      "label": "SELECT * FROM resource WHERE id = ?",
+      "variant": "emphasis"
+    },
+    {
+      "id": "res-db",
+      "from": "db",
+      "to": "api",
+      "y": 307,
+      "label": "row dataset",
+      "variant": "return"
+    },
+    {
+      "id": "set-cache",
+      "from": "api",
+      "to": "redis",
+      "y": 345,
+      "label": "SETEX cache:key 3600 dataset",
+      "variant": "dashed"
+    },
+    {
+      "id": "res-api",
+      "from": "api",
+      "to": "browser",
+      "y": 380,
+      "label": "200 OK (JSON payload)",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "browser",
+      "from": 165,
+      "to": 385,
+      "type": "frontend"
+    },
+    {
+      "participant": "api",
+      "from": 170,
+      "to": 380,
+      "type": "backend"
+    },
+    {
+      "participant": "redis",
+      "from": 200,
+      "to": 242,
+      "type": "database"
+    },
+    {
+      "participant": "db",
+      "from": 270,
+      "to": 312,
+      "type": "database"
+    },
+    {
+      "participant": "redis",
+      "from": 340,
+      "to": 365,
+      "type": "database"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Client Ingress",
+      "items": [
+        "Browser triggers GET /api/resource request",
+        "API Server handles incoming route & authentication"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Cache Miss & Fallback",
+      "items": [
+        "API issues GET cache:key against Redis",
+        "Redis reports key absent (cache miss)",
+        "API falls back to PostgreSQL primary database"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Cache Fill & Delivery",
+      "items": [
+        "API populates Redis with SETEX (TTL 1 hour)",
+        "Fresh dataset returned to Browser as 200 OK JSON",
+        "Subsequent requests hit Redis directly"
+      ]
+    }
+  ]
+}

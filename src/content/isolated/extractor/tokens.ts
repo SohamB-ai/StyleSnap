@@ -239,16 +239,19 @@ export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; 
   const { cssVars, breakpoints: sheetBreakpoints, warnings } = scanStylesheets();
 
   const colorCounts = new Map<string, { parsed: ParsedColor; count: number; contexts: Set<ColorContext> }>();
-  const fontMap = new Map<string, { family: string; stack: string; sizePx: number; weight: string; lh: string; count: number }>();
+  const fontMap = new Map<string, { family: string; stack: string; sizePx: number; weight: string; lh: string; ls: string; count: number }>();
   const spacingCounts = new Map<number, number>();
   const shadowCounts = new Map<string, number>();
   const radiusCounts = new Map<string, number>();
+  const zIndexCounts = new Map<number, { count: number; tags: Set<string> }>();
+  const letterSpacingSet = new Set<string>(["normal"]);
+  const lineHeightSet = new Set<string>(["normal"]);
 
   const rawList = Array.from(document.querySelectorAll<HTMLElement>(
-    "body, header, footer, nav, main, section, article, aside, form, button, a, h1, h2, h3, h4, h5, h6, input, div, span, p"
+    "body, header, footer, nav, main, section, article, aside, form, button, a, h1, h2, h3, h4, h5, h6, input, textarea, select, label, table, tr, th, td, ul, ol, li, div, span, p, blockquote, figure, figcaption, code, pre"
   ));
   const elements: HTMLElement[] = [];
-  const maxElements = Math.min(domLimit, 350);
+  const maxElements = Math.min(Math.max(domLimit || 2000, 500), 3000);
 
   for (const el of rawList) {
     if (elements.length >= maxElements) break;
@@ -300,14 +303,18 @@ export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; 
     const familyPrimary = familyStack.split(",")[0].trim().replace(/['"]/g, "");
     const sizePx = parseFloat(cs.fontSize) || 16;
     const weight = cs.fontWeight || "400";
-    const lh = cs.lineHeight || "normal";
+    const lh = cs.lineHeight && cs.lineHeight !== "normal" ? cs.lineHeight : "normal";
+    const ls = cs.letterSpacing && cs.letterSpacing !== "normal" && cs.letterSpacing !== "0px" ? cs.letterSpacing : "normal";
+
+    if (lh !== "normal") lineHeightSet.add(lh);
+    if (ls !== "normal") letterSpacingSet.add(ls);
 
     const fontKey = `${familyPrimary}-${sizePx}-${weight}`;
     const fontEntry = fontMap.get(fontKey);
     if (fontEntry) {
       fontEntry.count++;
     } else {
-      fontMap.set(fontKey, { family: familyPrimary, stack: familyStack, sizePx, weight, lh, count: 1 });
+      fontMap.set(fontKey, { family: familyPrimary, stack: familyStack, sizePx, weight, lh, ls, count: 1 });
     }
 
     // Spacing (Padding/Margin)
@@ -331,6 +338,22 @@ export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; 
     const br = cs.borderRadius;
     if (br && br !== "0px") {
       radiusCounts.set(br, (radiusCounts.get(br) || 0) + 1);
+    }
+
+    // Z-Index extraction
+    const zVal = cs.zIndex;
+    if (zVal && zVal !== "auto") {
+      const zNum = parseInt(zVal, 10);
+      if (!isNaN(zNum) && zNum !== 0 && Math.abs(zNum) < 100000) {
+        const existing = zIndexCounts.get(zNum);
+        const tag = el.tagName.toLowerCase();
+        if (existing) {
+          existing.count++;
+          existing.tags.add(tag);
+        } else {
+          zIndexCounts.set(zNum, { count: 1, tags: new Set([tag]) });
+        }
+      }
     }
   }
 
@@ -424,31 +447,37 @@ export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; 
     };
   }).sort((a, b) => b.frequency - a.frequency);
 
-  const typeScale: TypeScaleEntry[] = Array.from(fontMap.values())
-    .sort((a, b) => b.sizePx - a.sizePx)
-    .map(({ family, sizePx, weight, lh, count }) => {
-      let role: TypeRole = "body";
-      if (sizePx >= 40) role = "h1";
-      else if (sizePx >= 32) role = "h2";
-      else if (sizePx >= 24) role = "h3";
-      else if (sizePx >= 20) role = "h4";
-      else if (sizePx >= 18) role = "h5";
-      else if (sizePx >= 16) role = "h6";
-      else if (sizePx >= 14) role = "body";
-      else if (sizePx >= 12) role = "body-sm";
-      else role = "caption";
+  // Deduplicate typeScale by family, size, weight, role
+  const seenTypeScale = new Set<string>();
+  const typeScale: TypeScaleEntry[] = [];
 
-      return {
+  for (const { family, sizePx, weight, lh, ls, count } of Array.from(fontMap.values()).sort((a, b) => b.sizePx - a.sizePx)) {
+    let role: TypeRole = "body";
+    if (sizePx >= 40) role = "h1";
+    else if (sizePx >= 32) role = "h2";
+    else if (sizePx >= 24) role = "h3";
+    else if (sizePx >= 20) role = "h4";
+    else if (sizePx >= 18) role = "h5";
+    else if (sizePx >= 16) role = "h6";
+    else if (sizePx >= 14) role = "body";
+    else if (sizePx >= 12) role = "body-sm";
+    else role = "caption";
+
+    const key = `${family}-${sizePx}-${weight}-${role}`;
+    if (!seenTypeScale.has(key)) {
+      seenTypeScale.add(key);
+      typeScale.push({
         role,
         fontSize: `${sizePx}px`,
         fontSizePx: sizePx,
         fontWeight: weight,
         lineHeight: lh,
-        letterSpacing: "0px",
+        letterSpacing: ls,
         fontFamily: family,
         frequency: count
-      };
-    });
+      });
+    }
+  }
 
   // Normalize Spacing
   const sortedSpacing = Array.from(spacingCounts.entries()).sort((a, b) => a[0] - b[0]);
@@ -498,6 +527,15 @@ export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; 
     };
   });
 
+  // Z-Index Tokens
+  const zIndexTokens = Array.from(zIndexCounts.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([val, data]) => ({
+      value: val,
+      frequency: data.count,
+      contexts: Array.from(data.tags)
+    }));
+
   // Breakpoints
   const defaultBreakpoints = [
     { px: 640, em: "40em", label: "sm" },
@@ -518,8 +556,8 @@ export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; 
     typography: {
       families,
       scale: typeScale,
-      lineHeights: ["1", "1.2", "1.5", "1.6"],
-      letterSpacings: ["normal", "-0.02em", "0.05em"]
+      lineHeights: Array.from(lineHeightSet).slice(0, 8),
+      letterSpacings: Array.from(letterSpacingSet).slice(0, 8)
     },
     spacing: {
       values: spacingValues,
@@ -531,7 +569,7 @@ export function extractTokens(domLimit: number = 2000): { tokens: DesignTokens; 
     radii: radiusTokens,
     breakpoints: breakpointTokens,
     cssVariables: cssVars,
-    zIndex: []
+    zIndex: zIndexTokens
   };
 
   return { tokens, warnings, framework: detectedFramework };

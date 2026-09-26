@@ -76,6 +76,15 @@ export function generateTokensJSON(result: ExtractionResult): string {
     };
   }
 
+  const zIndexGroup: Record<string, any> = {};
+  for (const z of tokens.zIndex || []) {
+    zIndexGroup[`z-${z.value}`] = {
+      $value: z.value,
+      $type: "number",
+      $description: `Used on ${z.contexts.join(", ")} (frequency: ${z.frequency})`
+    };
+  }
+
   const dtcgPayload = {
     $metadata: {
       source: result.url,
@@ -89,7 +98,8 @@ export function generateTokensJSON(result: ExtractionResult): string {
     "font-size": fontSizes,
     spacing: spacingGroup,
     "border-radius": radiiGroup,
-    "box-shadow": shadowGroup
+    "box-shadow": shadowGroup,
+    "z-index": zIndexGroup
   };
 
   return JSON.stringify(dtcgPayload, null, 2);
@@ -97,7 +107,7 @@ export function generateTokensJSON(result: ExtractionResult): string {
 
 // 2. DESIGN.md AI-Readable Markdown Generator
 export function generateDesignMD(result: ExtractionResult): string {
-  const { tokens } = result;
+  const { tokens, layout, components } = result;
   const dateStr = new Date(result.timestamp).toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
@@ -114,6 +124,12 @@ export function generateDesignMD(result: ExtractionResult): string {
       md += `- ${w}\n`;
     }
     md += `\n`;
+  }
+
+  // Theme Overview
+  if (tokens.themeSummary) {
+    md += `## Design Philosophy & Theme\n`;
+    md += `${tokens.themeSummary}\n\n`;
   }
 
   // CSS Variables
@@ -146,10 +162,10 @@ export function generateDesignMD(result: ExtractionResult): string {
     const primary = tokens.typography.families[0];
     md += `**Primary font:** ${primary.name} (\`${primary.stack}\`)\n\n`;
   }
-  md += `| Role | Size | Weight | Line Height |\n`;
-  md += `|------|------|--------|-------------|\n`;
+  md += `| Role | Size | Weight | Line Height | Tracking |\n`;
+  md += `|------|------|--------|-------------|----------|\n`;
   for (const entry of tokens.typography.scale) {
-    md += `| ${entry.role} | ${entry.fontSize} | ${entry.fontWeight} | ${entry.lineHeight} |\n`;
+    md += `| ${entry.role} | ${entry.fontSize} | ${entry.fontWeight} | ${entry.lineHeight} | ${entry.letterSpacing} |\n`;
   }
   md += `\n`;
 
@@ -176,6 +192,17 @@ export function generateDesignMD(result: ExtractionResult): string {
   }
   md += `\n`;
 
+  // Z-Index
+  if (tokens.zIndex && tokens.zIndex.length > 0) {
+    md += `## Z-Index Elevation\n\n`;
+    md += `| Value | Frequency | Element Contexts |\n`;
+    md += `|-------|-----------|------------------|\n`;
+    for (const z of tokens.zIndex) {
+      md += `| \`${z.value}\` | ${z.frequency} | ${z.contexts.join(", ")} |\n`;
+    }
+    md += `\n`;
+  }
+
   // Breakpoints
   if (tokens.breakpoints.length > 0) {
     md += `## Breakpoints\n\n`;
@@ -184,7 +211,46 @@ export function generateDesignMD(result: ExtractionResult): string {
     for (const b of tokens.breakpoints) {
       md += `| ${b.label} | ${b.px}px | ${b.em} |\n`;
     }
+    md += `\n`;
   }
+
+  // Layout Structure
+  if (layout && layout.sections.length > 0) {
+    md += `## Page Layout & Section Structure\n\n`;
+    md += `- **Max Content Width:** \`${layout.maxContentWidth}\`\n`;
+    md += `- **Base Grid:** ${layout.baseGrid.type === "css-grid" ? `${layout.baseGrid.columnCount} columns` : "Flexbox"}\n\n`;
+    md += `| # | Section | Tag | Layout | Grid Columns | Gap | Padding |\n`;
+    md += `|---|---------|-----|--------|--------------|-----|---------|\n`;
+    for (let i = 0; i < layout.sections.length; i++) {
+      const s = layout.sections[i];
+      md += `| ${i + 1} | **${s.label}** | \`<${s.tagName}>\` | ${s.layoutType} | ${s.gridCols || "—"} | ${s.gap || "—"} | ${s.padding || "—"} |\n`;
+    }
+    md += `\n`;
+  }
+
+  // Detected Components
+  if (components && components.length > 0) {
+    const highConf = components.filter((c) => c.confidence >= 0.55);
+    if (highConf.length > 0) {
+      md += `## Component Library\n\n`;
+      for (const c of highConf.slice(0, 10)) {
+        md += `### ${c.label.toUpperCase()} (\`${c.selector}\` — x${c.instanceCount} instances)\n`;
+        md += `Confidence: ${(c.confidence * 100).toFixed(0)}%\n\n`;
+        if (c.css) {
+          md += `\`\`\`css\n${c.selector} {\n${c.css}\n}\n\`\`\`\n\n`;
+        }
+        if (c.html) {
+          md += `\`\`\`html\n${c.html}\n\`\`\`\n\n`;
+        }
+      }
+    }
+  }
+
+  // Interactive Guidelines
+  md += `## Interactive States & Animation Guidelines\n\n`;
+  md += `1. **Transitions:** Use \`transition-all 150ms cubic-bezier(0.4, 0, 0.2, 1)\` on buttons, anchors, and cards.\n`;
+  md += `2. **Focus States:** Add visible \`focus-visible:ring-2 focus-visible:ring-offset-2\` using the accent token.\n`;
+  md += `3. **Elevation on Hover:** Elevate card surfaces with corresponding shadow levels on hover.\n`;
 
   return md;
 }
@@ -253,19 +319,19 @@ module.exports = {
 
 // 4. Agent-Ready SKILL.md Generator (For Claude Code, Antigravity, Cursor)
 export function generateSkillMD(result: ExtractionResult): string {
-  const { tokens } = result;
+  const { tokens, layout, components } = result;
   const domain = new URL(result.url).hostname.replace(/^www\./, "");
   const title = result.title.replace(/[\n\r]+/g, " ").trim();
 
   let skill = `---
 name: ${kebabCase(domain)}-design-system
-description: Apply the design system, colors, typography, and UI rules of ${domain} (${title}). Use this skill whenever building or styling UI elements that should match this website.
+description: Apply the design system, colors, typography, layout, and UI components of ${domain} (${title}). Use this skill whenever building or styling UI elements that should match this website.
 ---
 
 # ${title} — Design System Skill
 
 > Extracted from [${result.url}](${result.url}) using StyleSnap v${result.version}.
-> ${tokens.themeSummary || "Complete design tokens and layout conventions for AI coding agents."}
+> ${tokens.themeSummary || "Complete design tokens, layout hierarchy, and component conventions for AI coding agents."}
 
 ## Overview & Activation Rules
 When creating or modifying components for this project:
@@ -314,10 +380,10 @@ Paste these CSS variables into your global stylesheet (e.g. \`globals.css\` or \
   }
 
   skill += `### Type Scale\n\n`;
-  skill += `| Role | Size | Weight | Line Height |\n`;
-  skill += `|------|------|--------|-------------|\n`;
+  skill += `| Role | Size | Weight | Line Height | Tracking |\n`;
+  skill += `|------|------|--------|-------------|----------|\n`;
   for (const entry of tokens.typography.scale) {
-    skill += `| \`${entry.role}\` | ${entry.fontSize} | ${entry.fontWeight} | ${entry.lineHeight} |\n`;
+    skill += `| \`${entry.role}\` | ${entry.fontSize} | ${entry.fontWeight} | ${entry.lineHeight} | ${entry.letterSpacing} |\n`;
   }
   skill += `\n`;
 
@@ -344,11 +410,50 @@ Paste these CSS variables into your global stylesheet (e.g. \`globals.css\` or \
     skill += `\n`;
   }
 
+  if (tokens.zIndex && tokens.zIndex.length > 0) {
+    skill += `### Z-Index Layers\n`;
+    for (const z of tokens.zIndex) {
+      skill += `- \`z-${z.value}\`: ${z.value} (${z.contexts.join(", ")})\n`;
+    }
+    skill += `\n`;
+  }
+
+  // Layout Structure
+  if (layout && layout.sections.length > 0) {
+    skill += `## 6. Page Architecture & Layout Sections\n\n`;
+    skill += `- **Max Content Width:** \`${layout.maxContentWidth}\`\n`;
+    skill += `- **Base Grid:** ${layout.baseGrid.type === "css-grid" ? `${layout.baseGrid.columnCount} columns` : "Flexbox"}\n\n`;
+    skill += `| # | Section | Tag | Layout Type | Gap | Padding |\n`;
+    skill += `|---|---------|-----|-------------|-----|---------|\n`;
+    layout.sections.forEach((s, i) => {
+      skill += `| ${i + 1} | **${s.label}** | \`<${s.tagName}>\` | ${s.layoutType} | ${s.gap || "—"} | ${s.padding || "—"} |\n`;
+    });
+    skill += `\n`;
+  }
+
+  // Component Patterns
+  if (components && components.length > 0) {
+    const highConf = components.filter(c => c.confidence >= 0.55);
+    if (highConf.length > 0) {
+      skill += `## 7. Reusable Component Patterns\n\n`;
+      highConf.slice(0, 8).forEach(c => {
+        skill += `### ${c.label.toUpperCase()} (\`${c.selector}\`)\n`;
+        if (c.css) {
+          skill += `\`\`\`css\n${c.selector} {\n${c.css}\n}\n\`\`\`\n`;
+        }
+        if (c.html) {
+          skill += `\`\`\`html\n${c.html}\n\`\`\`\n\n`;
+        }
+      });
+    }
+  }
+
   // Guidelines for AI Agents
-  skill += `## 6. Guidelines for AI Coding Agents (Claude Code, Antigravity, Cursor)
+  skill += `## 8. Guidelines for AI Coding Agents (Claude Code, Antigravity, Cursor)
 1. **Component Scoping**: Wrap all custom styles inside clean utility classes or CSS module tokens.
 2. **Animation & Interactions**: Ensure smooth 150ms-200ms ease-in-out transitions on hover/focus state changes.
 3. **Responsive Design**: Respect the extracted breakpoints (${tokens.breakpoints.map(b => `${b.label}: ${b.px}px`).join(", ")}).
+4. **Fidelity over Defaults**: Always reference the CSS custom properties instead of guessing colors or padding.
 `;
 
   return skill;

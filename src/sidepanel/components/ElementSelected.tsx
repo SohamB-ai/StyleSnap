@@ -76,7 +76,7 @@ export const ElementSelected: React.FC = () => {
       <div className="flex items-center gap-2 pt-2">
         <button
           onClick={handleInspectAgain}
-          className="flex-1 py-2 bg-accent/10 border border-accent text-accent hover:bg-accent hover:text-white font-semibold text-xs rounded flex items-center justify-center gap-1.5 transition-colors"
+          className="flex-1 py-2 bg-accent/10 border border-accent text-accent hover:bg-accent hover:text-accent-contrast font-semibold text-xs rounded flex items-center justify-center gap-1.5 transition-colors shadow-xs"
         >
           <MousePointer2 className="w-3.5 h-3.5" />
           <span>Inspect Another Element</span>

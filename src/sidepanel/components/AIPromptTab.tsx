@@ -1,25 +1,26 @@
 // V2 AI Prompt Generator & DESIGN.md Preview Tab
 
 import React, { useState, useMemo } from "react";
-import { Copy, Download, Bot, Check, FileText, Sparkles } from "lucide-react";
+import { Copy, Download, Bot, Check, FileText, Sparkles, Palette } from "lucide-react";
 import { useStore } from "../store";
 import { AITool } from "../../shared/types";
 import { generateMasterPrompt } from "../../background/services/promptEngine";
 import { generateDesignMD } from "../../background/services/exporter";
+import { TokensTab } from "./TokensTab";
 
 const AI_TOOLS: { id: AITool; name: string; tag: string }[] = [
-  { id: "cursor", name: "Cursor AI", tag: "~4,000 tokens" },
-  { id: "claude-code", name: "Claude Code", tag: "~6,000 tokens" },
-  { id: "v0", name: "v0 by Vercel", tag: "~2,000 tokens" },
-  { id: "bolt", name: "Bolt.new", tag: "~3,000 tokens" },
-  { id: "lovable", name: "Lovable", tag: "~1,500 tokens" }
+  { id: "cursor", name: "Cursor AI", tag: "~5,000 tokens" },
+  { id: "claude-code", name: "Claude Code", tag: "~7,000 tokens" },
+  { id: "v0", name: "v0 by Vercel", tag: "~4,000 tokens" },
+  { id: "bolt", name: "Bolt.new", tag: "~4,500 tokens" },
+  { id: "lovable", name: "Lovable", tag: "~3,000 tokens" }
 ];
 
 export const AIPromptTab: React.FC = () => {
   const result = useStore((s) => s.result);
   const showToast = useStore((s) => s.showToast);
 
-  const [viewMode, setViewMode] = useState<"ai-prompt" | "design-md">("ai-prompt");
+  const [viewMode, setViewMode] = useState<"ai-prompt" | "design-md" | "tokens">("ai-prompt");
   const [selectedTool, setSelectedTool] = useState<AITool>("cursor");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [copiedDesign, setCopiedDesign] = useState(false);
@@ -84,29 +85,40 @@ export const AIPromptTab: React.FC = () => {
 
   return (
     <div className="p-3 space-y-3.5 pb-8 text-xs">
-      {/* Sub-navigation Switcher: AI Master Prompt vs DESIGN.md Preview */}
+      {/* Sub-navigation Switcher: AI Master Prompt vs DESIGN.md Preview vs Design Tokens */}
       <div className="flex bg-elevated p-1 rounded-lg border border-border/60">
         <button
           onClick={() => setViewMode("ai-prompt")}
-          className={`flex-1 py-1.5 px-2 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 py-1.5 px-1.5 rounded-md font-medium text-[11px] flex items-center justify-center gap-1 transition-all ${
             viewMode === "ai-prompt"
               ? "bg-surface text-primary shadow-xs font-semibold"
               : "text-secondary hover:text-primary"
           }`}
         >
           <Sparkles className="w-3.5 h-3.5 text-accent" />
-          <span>AI Master Prompt</span>
+          <span>AI Prompt</span>
         </button>
         <button
           onClick={() => setViewMode("design-md")}
-          className={`flex-1 py-1.5 px-2 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 py-1.5 px-1.5 rounded-md font-medium text-[11px] flex items-center justify-center gap-1 transition-all ${
             viewMode === "design-md"
               ? "bg-surface text-primary shadow-xs font-semibold"
               : "text-secondary hover:text-primary"
           }`}
         >
           <FileText className="w-3.5 h-3.5 text-emerald-500" />
-          <span>DESIGN.md Preview</span>
+          <span>DESIGN.md</span>
+        </button>
+        <button
+          onClick={() => setViewMode("tokens")}
+          className={`flex-1 py-1.5 px-1.5 rounded-md font-medium text-[11px] flex items-center justify-center gap-1 transition-all ${
+            viewMode === "tokens"
+              ? "bg-surface text-primary shadow-xs font-semibold"
+              : "text-secondary hover:text-primary"
+          }`}
+        >
+          <Palette className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Tokens</span>
         </button>
       </div>
 
@@ -180,14 +192,14 @@ export const AIPromptTab: React.FC = () => {
             </button>
             <button
               onClick={handleDownloadPrompt}
-              className="py-2 px-3 bg-accent hover:bg-accent/90 text-white rounded-md flex items-center justify-center gap-1.5 text-xs font-semibold transition-all active:scale-[0.98] shadow-xs"
+              className="py-2 px-3 bg-accent hover:bg-accent/90 text-accent-contrast rounded-md flex items-center justify-center gap-1.5 text-xs font-semibold transition-all active:scale-[0.98] shadow-xs"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Download .txt</span>
             </button>
           </div>
         </>
-      ) : (
+      ) : viewMode === "design-md" ? (
         <>
           {/* DESIGN.md Preview Section */}
           <div className="space-y-1.5">
@@ -224,16 +236,20 @@ export const AIPromptTab: React.FC = () => {
                 </>
               )}
             </button>
-            <button
-              onClick={handleDownloadDesign}
-              className="py-2 px-3 bg-accent hover:bg-accent/90 text-white rounded-md flex items-center justify-center gap-1.5 text-xs font-semibold transition-all active:scale-[0.98] shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download .md</span>
-            </button>
+              <button
+                onClick={handleDownloadDesign}
+                className="py-2 px-3 bg-accent hover:bg-accent/90 text-accent-contrast rounded-md flex items-center justify-center gap-1.5 text-xs font-semibold transition-all active:scale-[0.98] shadow-xs"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download .md</span>
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="-mx-3 -mt-2">
+            <TokensTab />
           </div>
-        </>
-      )}
-    </div>
-  );
-};
+        )}
+      </div>
+    );
+  };

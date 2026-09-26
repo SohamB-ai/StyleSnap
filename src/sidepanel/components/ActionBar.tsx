@@ -102,7 +102,6 @@ export const ActionBar: React.FC = () => {
           // User cancelled save dialog — abort capture cleanly
           return;
         }
-        console.warn("showSaveFilePicker not supported or dismissed:", err);
       }
     }
 
@@ -130,7 +129,6 @@ export const ActionBar: React.FC = () => {
           },
           () => {
             if (chrome.runtime.lastError) {
-              console.warn("Screenshot trigger warning:", chrome.runtime.lastError.message);
               showToast("Cannot contact page content script. Please refresh the page.", "error");
               useStore.setState({ isCapturingScreenshot: false });
               useStore.getState().setPendingSaveHandle(null);

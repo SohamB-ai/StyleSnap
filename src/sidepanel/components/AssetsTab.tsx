@@ -41,7 +41,7 @@ export const AssetsTab: React.FC = () => {
               onClick={() => setFilter(type)}
               className={`px-2 py-1 text-[11px] font-medium rounded capitalize transition-colors ${
                 filter === type
-                  ? "bg-accent text-white font-semibold"
+                  ? "bg-accent text-accent-contrast font-semibold shadow-xs"
                   : "text-secondary hover:text-primary hover:bg-hover"
               }`}
             >
@@ -53,7 +53,7 @@ export const AssetsTab: React.FC = () => {
         {/* Download All ZIP */}
         <button
           onClick={handleDownloadZip}
-          className="h-8 px-2.5 bg-accent/10 border border-accent text-accent hover:bg-accent hover:text-white text-xs font-semibold rounded flex items-center gap-1.5 transition-all active:scale-95"
+          className="h-8 px-2.5 bg-accent/10 border border-accent text-accent hover:bg-accent hover:text-accent-contrast text-xs font-semibold rounded flex items-center gap-1.5 transition-all active:scale-95"
           title="Download All Assets as ZIP"
         >
           <Archive className="w-3.5 h-3.5" />

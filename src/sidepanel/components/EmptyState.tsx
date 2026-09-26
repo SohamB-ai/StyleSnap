@@ -32,7 +32,7 @@ export const EmptyState: React.FC = () => {
       <button
         onClick={handleExtract}
         disabled={isExtracting}
-        className="w-full max-w-[280px] py-2.5 px-4 rounded-xl bg-primary text-base font-semibold text-xs flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98] disabled:opacity-50 hover:opacity-90"
+        className="w-full max-w-[280px] py-2.5 px-4 rounded-xl bg-accent text-accent-contrast font-semibold text-xs flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98] disabled:opacity-50 hover:opacity-90"
       >
         {isExtracting ? (
           <>
@@ -46,6 +46,24 @@ export const EmptyState: React.FC = () => {
           </>
         )}
       </button>
+
+      {/* Inspector Mode Hint */}
+      <div className="mt-5 p-2.5 bg-surface border border-border/70 rounded-lg max-w-[280px] text-[11px] text-secondary text-left flex items-start gap-2">
+        <span className="text-accent text-sm leading-none mt-0.5">🎯</span>
+        <div>
+          <span className="font-semibold text-primary">Hover Inspector:</span>{" "}
+          Click the target cursor icon in the top header to inspect any single element on the page.
+        </div>
+      </div>
+
+      {/* Feature Capabilities Pills */}
+      <div className="flex flex-wrap items-center justify-center gap-1.5 mt-4 max-w-[280px]">
+        {["🎨 Design Tokens", "🧩 Components", "📐 Layout Structure", "⚡ AI Prompts", "📦 ZIP Export"].map((feat) => (
+          <span key={feat} className="text-[10px] font-mono px-2 py-0.5 bg-elevated border border-border/60 text-secondary rounded-full">
+            {feat}
+          </span>
+        ))}
+      </div>
     </div>
   );
 };

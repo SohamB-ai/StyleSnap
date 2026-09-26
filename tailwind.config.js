@@ -18,6 +18,7 @@ export default {
         muted: "var(--text-muted)",
         accent: {
           DEFAULT: "var(--accent)",
+          contrast: "var(--accent-contrast)",
           hover: "var(--accent-hover)",
           subtle: "var(--accent-subtle)"
         },

@@ -4,17 +4,18 @@
 
 @layer base {
   :root[data-theme="dark"] {
-    --bg-base: #000000;
-    --bg-surface: #0A0A0A;
-    --bg-elevated: #171717;
-    --bg-hover: #262626;
-    --border: #262626;
+    --bg-base: #0F0F11;
+    --bg-surface: #1A1A1F;
+    --bg-elevated: #232329;
+    --bg-hover: #2E2E36;
+    --border: #2E2E36;
     --text-primary: #FAFAFA;
     --text-secondary: #A1A1AA;
-    --text-muted: #52525B;
+    --text-muted: #71717A;
     --accent: #FFFFFF;
+    --accent-contrast: #0F0F11;
     --accent-hover: #E4E4E7;
-    --accent-subtle: #18181B;
+    --accent-subtle: #1A1A1F;
     --success: #22C55E;
     --warning: #EAB308;
     --error: #EF4444;
@@ -30,6 +31,7 @@
     --text-secondary: #71717A;
     --text-muted: #A1A1AA;
     --accent: #18181B;
+    --accent-contrast: #FFFFFF;
     --accent-hover: #27272A;
     --accent-subtle: #F4F4F5;
     --success: #22C55E;

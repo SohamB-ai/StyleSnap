@@ -27,6 +27,44 @@ export function scanAssets(): AssetManifest {
     } catch {}
   });
 
+  // 1b. Scan <picture> sources & <video poster>
+  const videoElements = Array.from(document.querySelectorAll<HTMLVideoElement>("video[poster]"));
+  videoElements.forEach((vid, i) => {
+    try {
+      if (vid.poster && !images.some((img) => img.src === vid.poster)) {
+        images.push({
+          id: `vid-poster-${i + 1}`,
+          src: vid.poster,
+          alt: "Video poster preview",
+          naturalWidth: vid.videoWidth || 0,
+          naturalHeight: vid.videoHeight || 0,
+          type: "img",
+          mimeType: "image/jpeg",
+          sizeEstimate: 0
+        });
+      }
+    } catch {}
+  });
+
+  const pictureSources = Array.from(document.querySelectorAll<HTMLSourceElement>("picture source[srcset]"));
+  pictureSources.forEach((srcEl, i) => {
+    try {
+      const rawSrcset = srcEl.srcset?.split(",")[0]?.trim()?.split(" ")[0];
+      if (rawSrcset && !rawSrcset.startsWith("data:") && !images.some((img) => img.src === rawSrcset)) {
+        images.push({
+          id: `pic-src-${i + 1}`,
+          src: rawSrcset,
+          alt: "Responsive picture asset",
+          naturalWidth: 0,
+          naturalHeight: 0,
+          type: "picture",
+          mimeType: srcEl.type || "image/webp",
+          sizeEstimate: 0
+        });
+      }
+    } catch {}
+  });
+
   // 2. Scan inline <svg> elements
   const svgElements = Array.from(document.querySelectorAll("svg"));
   svgElements.slice(0, 50).forEach((svg, i) => {
